@@ -290,12 +290,8 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
 
             {/* Botão Aplicar do OCR - Sempre mostra quando há sugestões */}
             {hasOcrSuggestion && (
-              <div className={`flex items-center gap-2 p-2 rounded-lg border ${
-                needsUpdate 
-                  ? 'bg-accent/10 border-accent/30' 
-                  : 'bg-muted/50 border-border'
-              }`}>
-                <Wand2 className={`w-4 h-4 flex-shrink-0 ${needsUpdate ? 'text-accent' : 'text-muted-foreground'}`} />
+              <div className="flex items-center gap-2 p-2 rounded-lg border bg-accent/10 border-accent/30">
+                <Wand2 className="w-4 h-4 flex-shrink-0 text-accent" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground">Sugestão do OCR:</p>
                   <p className="text-sm text-foreground truncate">
@@ -310,7 +306,7 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                     e.stopPropagation();
                     handleApplyFromOCR();
                   }}
-                  className={`h-7 px-3 text-xs ${needsUpdate ? 'btn-accent' : 'bg-muted hover:bg-muted/80'}`}
+                  className="h-7 px-3 text-xs btn-accent"
                 >
                   <Check className="w-3 h-3 mr-1" />
                   Aplicar
