@@ -1,0 +1,4 @@
+project_id = "hyuieqsxlrgjyuatrhqs"
+
+[functions.classify-photo]
+verify_jwt = false
