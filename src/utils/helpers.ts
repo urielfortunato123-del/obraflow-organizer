@@ -217,3 +217,103 @@ export function formatTimestamp(): string {
     .replace(/[-:T]/g, '')
     .substring(0, 13);
 }
+
+/**
+ * Extrai local e serviço do texto OCR
+ * Formato esperado: "DATA HORA • LOCAL SERVICO"
+ * Ex: "31/08/2025 10:27 • Free Flow P-09 Execução de limpeza"
+ */
+export function parseOCRForLocalServico(ocrText: string | undefined): { local: string | null; servico: string | null } {
+  if (!ocrText || ocrText.trim() === '') {
+    return { local: null, servico: null };
+  }
+
+  // Procura pelo padrão com bullet point (•)
+  const bulletMatch = ocrText.match(/•\s*(.+)/);
+  if (bulletMatch) {
+    const afterBullet = bulletMatch[1].trim();
+    return parseLocalServico(afterBullet);
+  }
+
+  // Se não tem bullet, tenta extrair após a data/hora
+  // Padrão: "DD/MM/YYYY HH:MM texto..."
+  const dateTimeMatch = ocrText.match(/\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s*(.+)/);
+  if (dateTimeMatch) {
+    return parseLocalServico(dateTimeMatch[1].trim());
+  }
+
+  // Tenta sem hora: "DD/MM/YYYY texto..."
+  const dateOnlyMatch = ocrText.match(/\d{1,2}\/\d{1,2}\/\d{4}\s+(.+)/);
+  if (dateOnlyMatch) {
+    return parseLocalServico(dateOnlyMatch[1].trim());
+  }
+
+  // Se não encontrou padrão, usa o texto todo como possível entrada
+  return parseLocalServico(ocrText.trim());
+}
+
+/**
+ * Separa string em local e serviço
+ * Heurísticas:
+ * - Códigos como "P-09", "BR-101" fazem parte do local
+ * - Palavras de ação indicam início do serviço: Execução, Manutenção, Limpeza, etc.
+ */
+function parseLocalServico(text: string): { local: string | null; servico: string | null } {
+  if (!text || text.length < 3) {
+    return { local: null, servico: null };
+  }
+
+  // Palavras-chave que indicam início do serviço
+  const servicoKeywords = [
+    'execução', 'execucao', 'manutenção', 'manutencao', 'limpeza', 'inspeção', 'inspecao',
+    'reparo', 'instalação', 'instalacao', 'troca', 'substituição', 'substituicao',
+    'verificação', 'verificacao', 'teste', 'medição', 'medicao', 'corte', 'poda',
+    'roçada', 'rocada', 'capina', 'pintura', 'sinalização', 'sinalizacao',
+    'pavimentação', 'pavimentacao', 'drenagem', 'terraplanagem', 'escavação', 'escavacao',
+    'concretagem', 'armação', 'armacao', 'forma', 'demolição', 'demolicao',
+    'recuperação', 'recuperacao', 'restauração', 'restauracao', 'reforço', 'reforco',
+    'vistoria', 'fiscalização', 'fiscalizacao', 'levantamento', 'cadastro',
+    'serviço', 'servico', 'atividade', 'operação', 'operacao', 'obra'
+  ];
+
+  const textLower = text.toLowerCase();
+  
+  // Procura pela primeira palavra-chave de serviço
+  let servicoStart = -1;
+  let foundKeyword = '';
+  
+  for (const keyword of servicoKeywords) {
+    const idx = textLower.indexOf(keyword);
+    if (idx !== -1 && (servicoStart === -1 || idx < servicoStart)) {
+      servicoStart = idx;
+      foundKeyword = keyword;
+    }
+  }
+
+  if (servicoStart > 0) {
+    // Encontrou palavra-chave de serviço
+    const local = text.substring(0, servicoStart).trim();
+    const servico = text.substring(servicoStart).trim();
+    
+    if (local.length > 0 && servico.length > 0) {
+      return { local, servico };
+    }
+  }
+
+  // Fallback: Tenta dividir por padrões de código (P-XX, KM XX, etc.)
+  const codeMatch = text.match(/^(.+?(?:P-\d+|KM\s*\d+|BR-\d+|SP-\d+|[A-Z]{2,3}-\d+))\s+(.+)$/i);
+  if (codeMatch) {
+    return { local: codeMatch[1].trim(), servico: codeMatch[2].trim() };
+  }
+
+  // Último fallback: divide pela metade aproximadamente
+  const words = text.split(/\s+/);
+  if (words.length >= 2) {
+    const midPoint = Math.ceil(words.length / 2);
+    const local = words.slice(0, midPoint).join(' ');
+    const servico = words.slice(midPoint).join(' ');
+    return { local, servico };
+  }
+
+  return { local: text, servico: null };
+}

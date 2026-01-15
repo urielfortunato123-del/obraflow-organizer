@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { 
   MapPin, Calendar, FileText, CheckCircle, AlertCircle, Clock, 
-  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy 
+  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { PhotoLightbox } from '@/components/PhotoLightbox';
 import type { PhotoData } from '@/types/photo';
-import { formatDate, getOCRPreview } from '@/utils/helpers';
+import { formatDate, getOCRPreview, parseOCRForLocalServico } from '@/utils/helpers';
 
 interface PhotoCardProps {
   photo: PhotoData;
@@ -44,6 +44,31 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
   const [ocrValue, setOcrValue] = useState(photo.ocrText);
   const [showLightbox, setShowLightbox] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Parse OCR para extrair sugestões de local/serviço
+  const ocrSuggestion = useMemo(() => {
+    return parseOCRForLocalServico(photo.ocrText);
+  }, [photo.ocrText]);
+
+  const hasOcrSuggestion = ocrSuggestion.local || ocrSuggestion.servico;
+  const needsUpdate = 
+    (photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local) ||
+    (photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico);
+
+  const handleApplyFromOCR = () => {
+    const updates: Partial<PhotoData> = {};
+    if (ocrSuggestion.local) {
+      updates.local = ocrSuggestion.local;
+      setLocalValue(ocrSuggestion.local);
+    }
+    if (ocrSuggestion.servico) {
+      updates.servico = ocrSuggestion.servico;
+      setServicoValue(ocrSuggestion.servico);
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(photo.id, updates);
+    }
+  };
 
   const handleSaveLocal = () => {
     onUpdate(photo.id, { local: localValue });
@@ -223,6 +248,32 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Botão Aplicar do OCR - mostra quando há sugestão e campos pendentes */}
+            {hasOcrSuggestion && needsUpdate && (
+              <div className="flex items-center gap-2 p-2 bg-accent/10 border border-accent/30 rounded-lg">
+                <Wand2 className="w-4 h-4 text-accent flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Sugestão do OCR:</p>
+                  <p className="text-sm text-foreground truncate">
+                    {ocrSuggestion.local && <span><strong>Local:</strong> {ocrSuggestion.local}</span>}
+                    {ocrSuggestion.local && ocrSuggestion.servico && <span className="mx-1">•</span>}
+                    {ocrSuggestion.servico && <span><strong>Serviço:</strong> {ocrSuggestion.servico}</span>}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApplyFromOCR();
+                  }}
+                  className="btn-accent h-7 px-3 text-xs"
+                >
+                  <Check className="w-3 h-3 mr-1" />
+                  Aplicar
+                </Button>
               </div>
             )}
 
