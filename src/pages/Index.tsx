@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { ConfigPanel } from '@/components/ConfigPanel';
 import { PhotoUploader } from '@/components/PhotoUploader';
 import { PhotoCard } from '@/components/PhotoCard';
 import { ProgressBar } from '@/components/ProgressBar';
 import { ActionButtons } from '@/components/ActionButtons';
+import { FolderTreeView } from '@/components/FolderTreeView';
 import type { PhotoData, AppSettings } from '@/types/photo';
 import { DEFAULT_SETTINGS } from '@/types/photo';
 import { generateId, extractDateFromText, extractCoordinatesFromText } from '@/utils/helpers';
@@ -41,23 +42,32 @@ const Index = () => {
 
   // Adiciona fotos
   const handleFilesSelected = useCallback((files: FileList) => {
-    const newPhotos: PhotoData[] = Array.from(files).map((file) => ({
-      id: generateId(),
-      file,
-      thumbnailUrl: URL.createObjectURL(file),
-      filename: file.name,
-      ocrText: '',
-      ocrStatus: 'pending',
-      dateIso: null,
-      yearMonth: null,
-      latitude: null,
-      longitude: null,
-      local: settings.defaultLocal,
-      servico: settings.defaultServico,
-      aiStatus: 'pending',
-      aiConfidence: null,
-      status: 'Pendente',
-    }));
+    const newPhotos: PhotoData[] = Array.from(files).map((file) => {
+      // Extrai o caminho da pasta do webkitRelativePath
+      const relativePath = (file as any).webkitRelativePath || '';
+      const pathParts = relativePath.split('/');
+      pathParts.pop(); // Remove o nome do arquivo
+      const folderPath = pathParts.join('/');
+
+      return {
+        id: generateId(),
+        file,
+        thumbnailUrl: URL.createObjectURL(file),
+        filename: file.name,
+        folderPath,
+        ocrText: '',
+        ocrStatus: 'pending' as const,
+        dateIso: null,
+        yearMonth: null,
+        latitude: null,
+        longitude: null,
+        local: settings.defaultLocal,
+        servico: settings.defaultServico,
+        aiStatus: 'pending' as const,
+        aiConfidence: null,
+        status: 'Pendente' as const,
+      };
+    });
 
     setPhotos((prev) => [...prev, ...newPhotos]);
     
@@ -296,6 +306,11 @@ const Index = () => {
           onFilesSelected={handleFilesSelected}
           disabled={isProcessing || isExporting}
         />
+
+        {/* Estrutura de pastas */}
+        {photos.length > 0 && (
+          <FolderTreeView files={photos.map(p => p.file)} />
+        )}
 
         {/* Barra de progresso */}
         {(isProcessing || isExporting || progress > 0) && (
