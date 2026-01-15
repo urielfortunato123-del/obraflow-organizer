@@ -383,6 +383,16 @@ const Index = () => {
           <TurboProcessPanel
             photos={photos}
             onBatchUpdate={handleBatchUpdate}
+            onScrollToPhoto={(photoId) => {
+              const element = document.getElementById(`photo-${photoId}`);
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                element.classList.add('ring-4', 'ring-accent', 'ring-offset-2');
+                setTimeout(() => {
+                  element.classList.remove('ring-4', 'ring-accent', 'ring-offset-2');
+                }, 3000);
+              }
+            }}
           />
         )}
 
@@ -452,16 +462,17 @@ const Index = () => {
 
             <div className="grid gap-4">
               {photos.map((photo) => (
-                <PhotoCard
-                  key={photo.id}
-                  photo={photo}
-                  onUpdate={handleUpdatePhoto}
-                  onDelete={handleDeletePhoto}
-                  onApplyToAll={(field, value) => {
-                    const allIds = photos.map(p => p.id);
-                    handleBatchUpdate(allIds, { [field]: value });
-                  }}
-                />
+                <div key={photo.id} id={`photo-${photo.id}`} className="transition-all duration-300">
+                  <PhotoCard
+                    photo={photo}
+                    onUpdate={handleUpdatePhoto}
+                    onDelete={handleDeletePhoto}
+                    onApplyToAll={(field, value) => {
+                      const allIds = photos.map(p => p.id);
+                      handleBatchUpdate(allIds, { [field]: value });
+                    }}
+                  />
+                </div>
               ))}
             </div>
           </div>
