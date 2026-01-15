@@ -1,5 +1,7 @@
-import { useCallback, useRef } from 'react';
-import { Upload, ImagePlus, FolderOpen } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { Upload, ImagePlus, FolderOpen, FolderTree } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface PhotoUploaderProps {
   onFilesSelected: (files: FileList) => void;
@@ -8,6 +10,28 @@ interface PhotoUploaderProps {
 
 export function PhotoUploader({ onFilesSelected, disabled }: PhotoUploaderProps) {
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [includeSubfolders, setIncludeSubfolders] = useState(true);
+
+  const filterImages = useCallback((files: FileList): FileList => {
+    const imageFiles = Array.from(files).filter(f => {
+      // Filtra apenas imagens
+      if (!f.type.startsWith('image/')) return false;
+      
+      // Se não incluir subpastas, filtra apenas arquivos da raiz
+      if (!includeSubfolders && (f as any).webkitRelativePath) {
+        const path = (f as any).webkitRelativePath as string;
+        const parts = path.split('/');
+        // Se tem mais de 2 partes (pasta/arquivo), está em subpasta
+        if (parts.length > 2) return false;
+      }
+      
+      return true;
+    });
+
+    const dt = new DataTransfer();
+    imageFiles.forEach(f => dt.items.add(f));
+    return dt.files;
+  }, [includeSubfolders]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -15,15 +39,12 @@ export function PhotoUploader({ onFilesSelected, disabled }: PhotoUploaderProps)
     
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      // Filtra apenas imagens
-      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-      if (imageFiles.length > 0) {
-        const dt = new DataTransfer();
-        imageFiles.forEach(f => dt.items.add(f));
-        onFilesSelected(dt.files);
+      const filtered = filterImages(files);
+      if (filtered.length > 0) {
+        onFilesSelected(filtered);
       }
     }
-  }, [onFilesSelected, disabled]);
+  }, [onFilesSelected, disabled, filterImages]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -32,17 +53,14 @@ export function PhotoUploader({ onFilesSelected, disabled }: PhotoUploaderProps)
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      // Filtra apenas imagens (importante para pastas)
-      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-      if (imageFiles.length > 0) {
-        const dt = new DataTransfer();
-        imageFiles.forEach(f => dt.items.add(f));
-        onFilesSelected(dt.files);
+      const filtered = filterImages(files);
+      if (filtered.length > 0) {
+        onFilesSelected(filtered);
       }
     }
     // Reset input para permitir selecionar os mesmos arquivos novamente
     e.target.value = '';
-  }, [onFilesSelected]);
+  }, [onFilesSelected, filterImages]);
 
   const handleFolderClick = () => {
     folderInputRef.current?.click();
@@ -111,9 +129,26 @@ export function PhotoUploader({ onFilesSelected, disabled }: PhotoUploaderProps)
             {...{ webkitdirectory: '', directory: '' } as any}
           />
         </div>
+
+        {/* Toggle para subpastas */}
+        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-border/50">
+          <Switch
+            id="includeSubfolders"
+            checked={includeSubfolders}
+            onCheckedChange={setIncludeSubfolders}
+            disabled={disabled}
+          />
+          <Label 
+            htmlFor="includeSubfolders" 
+            className="text-sm text-muted-foreground cursor-pointer flex items-center gap-1.5"
+          >
+            <FolderTree className="w-4 h-4" />
+            Incluir subpastas
+          </Label>
+        </div>
       </div>
       
-      <p className="text-xs text-muted-foreground mt-2">
+      <p className="text-xs text-muted-foreground">
         Suporta JPG, PNG e outros formatos de imagem
       </p>
     </div>
