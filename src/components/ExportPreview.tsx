@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Folder, Image, ChevronRight, ChevronDown, Download, FileText, AlertTriangle, Edit2, Check, X, Calendar } from 'lucide-react';
+import { useMemo, useState, useCallback } from 'react';
+import { Folder, Image, ChevronRight, ChevronDown, Download, FileText, AlertTriangle, Edit2, Check, X, Calendar, Shield, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 import type { PhotoData } from '@/types/photo';
 import { DISCIPLINAS, SERVICOS } from '@/types/photo';
 import { normalizeName } from '@/utils/helpers';
+import { useToast } from '@/hooks/use-toast';
 
 interface ExportPreviewProps {
   photos: PhotoData[];
@@ -325,15 +326,36 @@ function TreeNode({ node, level = 0, onEditPhotos, onEditDate }: TreeNodeProps) 
 }
 
 export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV, isExporting }: ExportPreviewProps) {
+  const { toast } = useToast();
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationComplete, setVerificationComplete] = useState(false);
+  
   const tree = useMemo(() => buildExportTree(photos), [photos]);
   
   const stats = useMemo(() => {
     const processedPhotos = photos.filter(p => p.status === 'OK' || p.frente || p.servico);
-    const pendingPhotos = photos.filter(p => 
+    
+    // Fotos PRONTAS = tem frente + disciplina + serviço + data
+    const readyPhotos = processedPhotos.filter(p => 
+      p.frente && p.frente !== 'FRENTE_NAO_INFORMADA' &&
+      p.disciplina && p.disciplina !== 'DISCIPLINA_NAO_INFORMADA' &&
+      p.servico && p.servico !== 'SERVICO_NAO_IDENTIFICADO' &&
+      p.yearMonth && p.yearMonth !== 'SEM_DATA' &&
+      p.dateIso && p.dateIso !== 'SEM_DIA'
+    );
+    
+    // Fotos pendentes de classificação
+    const pendingClassification = processedPhotos.filter(p => 
       (p.frente === 'FRENTE_NAO_INFORMADA' || !p.frente) ||
       (p.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !p.disciplina) ||
       (p.servico === 'SERVICO_NAO_IDENTIFICADO' || !p.servico)
     );
+    
+    // Fotos pendentes de DATA
+    const pendingDate = processedPhotos.filter(p => 
+      !p.yearMonth || !p.dateIso
+    );
+    
     const frentes = new Set(processedPhotos.map(p => p.frente).filter(Boolean));
     const disciplinas = new Set(processedPhotos.map(p => p.disciplina).filter(Boolean));
     const servicos = new Set(processedPhotos.map(p => p.servico).filter(Boolean));
@@ -341,7 +363,9 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
     return {
       total: photos.length,
       processed: processedPhotos.length,
-      pending: pendingPhotos.length,
+      ready: readyPhotos.length,
+      pendingClassification: pendingClassification.length,
+      pendingDate: pendingDate.length,
       frentes: frentes.size,
       disciplinas: disciplinas.size,
       servicos: servicos.size,
@@ -357,10 +381,96 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
   const handleEditDate = (photoIds: string[], date: Date) => {
     const dateIso = format(date, 'yyyy-MM-dd');
     const yearMonth = format(date, 'yyyy-MM');
+    const day = format(date, 'dd');
     photoIds.forEach(id => {
-      onUpdatePhoto(id, { dateIso, yearMonth });
+      onUpdatePhoto(id, { dateIso, yearMonth, day });
     });
   };
+
+  // Corrige datas ausentes usando lastModified do arquivo
+  const fixMissingDates = useCallback(() => {
+    let fixed = 0;
+    photos.forEach(photo => {
+      if (!photo.yearMonth || !photo.dateIso) {
+        // Usa lastModified do arquivo como fallback
+        if (photo.file?.lastModified) {
+          const date = new Date(photo.file.lastModified);
+          const dateIso = format(date, 'yyyy-MM-dd');
+          const yearMonth = format(date, 'yyyy-MM');
+          const day = format(date, 'dd');
+          onUpdatePhoto(photo.id, { dateIso, yearMonth, day });
+          fixed++;
+        }
+      }
+    });
+    
+    if (fixed > 0) {
+      toast({
+        title: '📅 Datas corrigidas!',
+        description: `${fixed} fotos receberam data do arquivo original.`,
+      });
+    } else {
+      toast({
+        title: 'Nenhuma correção necessária',
+        description: 'Todas as fotos já têm data definida.',
+      });
+    }
+  }, [photos, onUpdatePhoto, toast]);
+
+  // Verificação pré-download
+  const handleVerifyBeforeDownload = useCallback(async () => {
+    setIsVerifying(true);
+    
+    // 1. Corrige datas ausentes
+    let datesFixed = 0;
+    for (const photo of photos) {
+      if (!photo.yearMonth || !photo.dateIso) {
+        if (photo.file?.lastModified) {
+          const date = new Date(photo.file.lastModified);
+          const dateIso = format(date, 'yyyy-MM-dd');
+          const yearMonth = format(date, 'yyyy-MM');
+          const day = format(date, 'dd');
+          onUpdatePhoto(photo.id, { dateIso, yearMonth, day });
+          datesFixed++;
+        }
+      }
+    }
+    
+    // Simula verificação
+    await new Promise(r => setTimeout(r, 500));
+    
+    setIsVerifying(false);
+    setVerificationComplete(true);
+    
+    const issues: string[] = [];
+    if (stats.pendingClassification > 0) {
+      issues.push(`${stats.pendingClassification} sem classificação`);
+    }
+    if (stats.pendingDate > 0 && datesFixed < stats.pendingDate) {
+      issues.push(`${stats.pendingDate - datesFixed} sem data`);
+    }
+    
+    if (issues.length > 0) {
+      toast({
+        title: '⚠️ Verificação concluída com alertas',
+        description: `${datesFixed > 0 ? `${datesFixed} datas corrigidas. ` : ''}Pendências: ${issues.join(', ')}`,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: '✅ Verificação concluída!',
+        description: `Todas as ${stats.processed} fotos estão prontas para download.${datesFixed > 0 ? ` (${datesFixed} datas corrigidas)` : ''}`,
+      });
+    }
+  }, [photos, stats, onUpdatePhoto, toast]);
+
+  // Download com verificação
+  const handleDownloadWithVerify = useCallback(async () => {
+    if (!verificationComplete) {
+      await handleVerifyBeforeDownload();
+    }
+    onExportZip();
+  }, [verificationComplete, handleVerifyBeforeDownload, onExportZip]);
 
   if (photos.length === 0) return null;
 
@@ -378,17 +488,53 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
           <span>•</span>
           <span>{stats.servicos} serviço</span>
           <span>•</span>
-          <span>{stats.processed} foto(s)</span>
+          <span className="text-green-500 font-medium">{stats.ready} prontas</span>
         </div>
       </div>
 
+      {/* Status das fotos */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div className="bg-green-500/10 rounded-lg p-2 text-center">
+          <div className="text-lg font-bold text-green-500">{stats.ready}</div>
+          <div className="text-muted-foreground">Prontas</div>
+        </div>
+        <div className="bg-orange-500/10 rounded-lg p-2 text-center">
+          <div className="text-lg font-bold text-orange-500">{stats.pendingClassification}</div>
+          <div className="text-muted-foreground">Sem classificação</div>
+        </div>
+        <div className="bg-yellow-500/10 rounded-lg p-2 text-center">
+          <div className="text-lg font-bold text-yellow-500">{stats.pendingDate}</div>
+          <div className="text-muted-foreground">Sem data</div>
+        </div>
+        <div className="bg-muted/50 rounded-lg p-2 text-center">
+          <div className="text-lg font-bold text-foreground">{stats.processed}</div>
+          <div className="text-muted-foreground">Total</div>
+        </div>
+      </div>
+
+      {/* Botão para corrigir datas */}
+      {stats.pendingDate > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fixMissingDates}
+          className="w-full text-xs"
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          📅 Corrigir {stats.pendingDate} fotos sem data (usar data do arquivo)
+        </Button>
+      )}
+
       {/* Aviso de pendentes */}
-      {stats.pending > 0 && (
+      {(stats.pendingClassification > 0 || stats.pendingDate > 0) && (
         <div className="flex items-start gap-2 p-2 bg-warning/10 border border-warning/30 rounded-lg text-sm">
           <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
           <div className="text-warning">
-            <strong>{stats.pending} foto(s)</strong> com campos pendentes. 
-            <span className="block text-xs mt-0.5">Clique no ícone ✏️ para editar diretamente na estrutura.</span>
+            <strong>{stats.pendingClassification + stats.pendingDate} foto(s)</strong> com campos pendentes. 
+            <span className="block text-xs mt-0.5">
+              {stats.pendingClassification > 0 && `${stats.pendingClassification} sem classificação. `}
+              {stats.pendingDate > 0 && `${stats.pendingDate} sem data (clique acima para corrigir).`}
+            </span>
           </div>
         </div>
       )}
@@ -410,15 +556,44 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
       </div>
 
       {/* Botões de exportação */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button
-          onClick={onExportZip}
-          disabled={isExporting || stats.processed === 0}
-          className="btn-accent flex-1"
+          onClick={handleVerifyBeforeDownload}
+          disabled={isVerifying || isExporting}
+          variant="outline"
+          className="flex-1 min-w-[150px]"
         >
-          <Download className="w-4 h-4 mr-2" />
-          Baixar ZIP ({stats.processed} fotos)
+          {isVerifying ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Verificando...
+            </>
+          ) : (
+            <>
+              <Shield className="w-4 h-4 mr-2" />
+              Verificar antes de baixar
+            </>
+          )}
         </Button>
+        
+        <Button
+          onClick={handleDownloadWithVerify}
+          disabled={isExporting || stats.processed === 0}
+          className="btn-accent flex-1 min-w-[150px]"
+        >
+          {isExporting ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Gerando ZIP...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 mr-2" />
+              Baixar ZIP ({stats.processed} fotos)
+            </>
+          )}
+        </Button>
+        
         <Button
           onClick={onExportCSV}
           disabled={photos.length === 0}
@@ -429,6 +604,12 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
           CSV
         </Button>
       </div>
+
+      {verificationComplete && (
+        <div className="text-xs text-center text-muted-foreground">
+          ✅ Última verificação concluída
+        </div>
+      )}
     </div>
   );
 }

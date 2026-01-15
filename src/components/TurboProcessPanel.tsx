@@ -64,6 +64,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
 
   // Estatísticas e agrupamentos
   const stats = useMemo(() => {
+    // Fotos sem classificação completa
     const unclassified = photos.filter(
       p => !p.frente || 
            !p.disciplina || 
@@ -71,6 +72,14 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
            p.frente === 'FRENTE_NAO_INFORMADA' || 
            p.disciplina === 'DISCIPLINA_NAO_INFORMADA' ||
            p.servico === 'SERVICO_NAO_IDENTIFICADO'
+    );
+    
+    // Fotos PRONTAS = classificação + data completas
+    const ready = photos.filter(
+      p => p.frente && p.frente !== 'FRENTE_NAO_INFORMADA' &&
+           p.disciplina && p.disciplina !== 'DISCIPLINA_NAO_INFORMADA' &&
+           p.servico && p.servico !== 'SERVICO_NAO_IDENTIFICADO' &&
+           p.yearMonth && p.dateIso
     );
     
     const classified = photos.length - unclassified.length;
@@ -112,9 +121,11 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     return {
       total: photos.length,
       classified,
+      ready: ready.length,
       unclassified: unclassified.length,
       folders: folders.size,
       unclassifiedPhotos: unclassified,
+      readyPhotos: ready,
       topClassifications,
     };
   }, [photos]);
@@ -562,10 +573,16 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
                   </span>
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  {stats.unclassified > 0 
-                    ? `${stats.unclassified} fotos aguardando • ${stats.folders} pastas`
-                    : '✅ Todas as fotos classificadas!'
-                  }
+                  {stats.ready > 0 && (
+                    <span className="text-green-500 font-medium">
+                      ✅ {stats.ready} prontas para download
+                    </span>
+                  )}
+                  {stats.unclassified > 0 && (
+                    <span className={stats.ready > 0 ? 'ml-2' : ''}>
+                      • {stats.unclassified} pendentes
+                    </span>
+                  )}
                   {unrecognizedPhotos.length > 0 && (
                     <span className="ml-2 text-warning">
                       • ⚠️ {unrecognizedPhotos.length} para verificar
@@ -584,26 +601,30 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
           <CollapsibleContent>
             <div className="p-4 pt-0 border-t border-border space-y-4">
               {/* Estatísticas */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-foreground">{stats.total}</div>
-                  <div className="text-xs text-muted-foreground">Total</div>
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                <div className="bg-muted/50 rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-foreground">{stats.total}</div>
+                  <div className="text-[10px] text-muted-foreground">Total</div>
                 </div>
-                <div className="bg-green-500/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-green-500">{stats.classified}</div>
-                  <div className="text-xs text-muted-foreground">Classificadas</div>
+                <div className="bg-green-500/10 rounded-lg p-2 text-center border-2 border-green-500/30">
+                  <div className="text-xl font-bold text-green-500">{stats.ready}</div>
+                  <div className="text-[10px] text-muted-foreground">✅ Prontas</div>
                 </div>
-                <div className="bg-orange-500/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-orange-500">{stats.unclassified}</div>
-                  <div className="text-xs text-muted-foreground">Pendentes</div>
+                <div className="bg-blue-500/10 rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-blue-500">{stats.classified}</div>
+                  <div className="text-[10px] text-muted-foreground">Classificadas</div>
                 </div>
-                <div className="bg-warning/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-warning">{unrecognizedPhotos.length}</div>
-                  <div className="text-xs text-muted-foreground">Verificar</div>
+                <div className="bg-orange-500/10 rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-orange-500">{stats.unclassified}</div>
+                  <div className="text-[10px] text-muted-foreground">Pendentes</div>
                 </div>
-                <div className="bg-blue-500/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-blue-500">{stats.folders}</div>
-                  <div className="text-xs text-muted-foreground">Pastas</div>
+                <div className="bg-warning/10 rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-warning">{unrecognizedPhotos.length}</div>
+                  <div className="text-[10px] text-muted-foreground">Verificar</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-muted-foreground">{stats.folders}</div>
+                  <div className="text-[10px] text-muted-foreground">Pastas</div>
                 </div>
               </div>
 
