@@ -7,6 +7,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { ActionButtons } from '@/components/ActionButtons';
 import { FolderTreeView } from '@/components/FolderTreeView';
 import { BatchEditPanel } from '@/components/BatchEditPanel';
+import { ExportPreview } from '@/components/ExportPreview';
 import type { PhotoData, AppSettings } from '@/types/photo';
 import { DEFAULT_SETTINGS } from '@/types/photo';
 import { generateId, extractDateFromText, extractCoordinatesFromText } from '@/utils/helpers';
@@ -362,6 +363,16 @@ const Index = () => {
           <BatchEditPanel 
             photos={photos} 
             onBatchUpdate={handleBatchUpdate} 
+          />
+        )}
+
+        {/* Preview da estrutura de exportação */}
+        {photos.length > 0 && (
+          <ExportPreview
+            photos={photos}
+            onExportZip={handleGenerateZip}
+            onExportCSV={handleDownloadCSV}
+            isExporting={isExporting}
           />
         )}
 
