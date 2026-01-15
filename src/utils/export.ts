@@ -4,7 +4,31 @@ import type { PhotoData } from '@/types/photo';
 import { normalizeName, formatTimestamp } from './helpers';
 
 /**
+ * Formata ano/mês para nome de pasta
+ * Ex: "2025-08" -> "08_AGOSTO_2025"
+ */
+function formatYearMonthFolder(yearMonth: string | null): string {
+  if (!yearMonth) return 'SEM_DATA';
+  const [year, month] = yearMonth.split('-');
+  const monthNames = ['', 'JANEIRO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+  const monthNum = parseInt(month, 10);
+  return `${month}_${monthNames[monthNum] || 'MES'}_${year}`;
+}
+
+/**
+ * Formata dia para nome de pasta
+ * Ex: "2025-08-30" -> "30_08"
+ */
+function formatDayFolder(dateIso: string | null): string {
+  if (!dateIso) return 'SEM_DIA';
+  const parts = dateIso.split('-');
+  if (parts.length < 3) return 'SEM_DIA';
+  return `${parts[2]}_${parts[1]}`;
+}
+
+/**
  * Gera o arquivo ZIP com a estrutura de pastas organizada
+ * Estrutura: LOCAL / CATEGORIA / SERVIÇO / MÊS / DIA / fotos
  */
 export async function generateZip(
   photos: PhotoData[],
@@ -32,14 +56,17 @@ export async function generateZip(
   }
 
   // Adiciona cada foto na estrutura correta
+  // Estrutura: LOCAL / CATEGORIA / SERVIÇO / MÊS / DIA / foto
   for (let i = 0; i < processedPhotos.length; i++) {
     const photo = processedPhotos[i];
     
     const localFolder = normalizeName(photo.local || 'LOCAL_NAO_INFORMADO');
+    const categoriaFolder = normalizeName(photo.categoria || 'CATEGORIA_NAO_INFORMADA');
     const servicoFolder = normalizeName(photo.servico || 'SERVICO_NAO_INFORMADO');
-    const monthFolder = photo.yearMonth || 'SEM_DATA';
+    const mesFolder = formatYearMonthFolder(photo.yearMonth);
+    const diaFolder = formatDayFolder(photo.dateIso);
     
-    const folderPath = `${localFolder}/${servicoFolder}/${monthFolder}`;
+    const folderPath = `${localFolder}/${categoriaFolder}/${servicoFolder}/${mesFolder}/${diaFolder}`;
     const filePath = `${folderPath}/${photo.filename}`;
     
     // Lê o arquivo como ArrayBuffer
@@ -74,7 +101,9 @@ export function generateCSV(photos: PhotoData[]): void {
     'filename',
     'date_iso',
     'year_month',
+    'day',
     'local',
+    'categoria',
     'servico',
     'latitude',
     'longitude',
@@ -95,7 +124,9 @@ export function generateCSV(photos: PhotoData[]): void {
     escapeCSV(photo.filename),
     escapeCSV(photo.dateIso),
     escapeCSV(photo.yearMonth),
+    escapeCSV(photo.day),
     escapeCSV(photo.local),
+    escapeCSV(photo.categoria),
     escapeCSV(photo.servico),
     escapeCSV(photo.latitude),
     escapeCSV(photo.longitude),
