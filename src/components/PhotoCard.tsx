@@ -494,7 +494,6 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
         isOpen={showLightbox}
         onClose={() => setShowLightbox(false)}
       />
-      )}
 
       {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

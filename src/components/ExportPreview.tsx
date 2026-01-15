@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Folder, Image, ChevronRight, ChevronDown, Download, FileText, AlertTriangle, Edit2, Check, X } from 'lucide-react';
+import { Folder, Image, ChevronRight, ChevronDown, Download, FileText, AlertTriangle, Edit2, Check, X, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { format, parse } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import type { PhotoData } from '@/types/photo';
 import { DISCIPLINAS, SERVICOS } from '@/types/photo';
 import { normalizeName } from '@/utils/helpers';
@@ -145,17 +149,20 @@ interface TreeNodeProps {
   node: FolderNode;
   level?: number;
   onEditPhotos?: (photoIds: string[], field: string, value: string) => void;
+  onEditDate?: (photoIds: string[], date: Date) => void;
 }
 
-function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
+function TreeNode({ node, level = 0, onEditPhotos, onEditDate }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(level < 3);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(node.displayName);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   
   const hasChildren = node.children.size > 0;
   const hasImages = node.imageCount > 0;
-  const isWarning = node.name.includes('NAO_INFORMAD');
-  const isEditable = ['frente', 'disciplina', 'servico'].includes(node.level);
+  const isWarning = node.name.includes('NAO_INFORMAD') || node.name.includes('SEM_DATA') || node.name.includes('SEM_DIA');
+  const isEditable = ['frente', 'disciplina', 'servico', 'mes', 'dia'].includes(node.level);
+  const isDateLevel = ['mes', 'dia'].includes(node.level);
 
   const childrenArray = Array.from(node.children.values());
   
@@ -182,6 +189,14 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
       }
     }
     setEditing(false);
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date && onEditDate) {
+      const photoIds = getAllPhotoIds(node);
+      onEditDate(photoIds, date);
+      setCalendarOpen(false);
+    }
   };
 
   if (!hasChildren && !hasImages) return null;
@@ -255,7 +270,7 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
               <AlertTriangle className="w-3 h-3 text-warning flex-shrink-0" />
             )}
             
-            {isEditable && onEditPhotos && (
+            {isEditable && !isDateLevel && onEditPhotos && (
               <button 
                 onClick={(e) => { e.stopPropagation(); setEditing(true); }}
                 className="p-1 opacity-0 group-hover:opacity-100 hover:bg-muted rounded transition-opacity"
@@ -263,6 +278,29 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
               >
                 <Edit2 className="w-3 h-3 text-muted-foreground" />
               </button>
+            )}
+
+            {isDateLevel && onEditDate && (
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <button 
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-1 opacity-0 group-hover:opacity-100 hover:bg-muted rounded transition-opacity"
+                    title={`Editar ${node.level === 'mes' ? 'mês' : 'data'}`}
+                  >
+                    <Calendar className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    onSelect={handleDateSelect}
+                    initialFocus
+                    locale={ptBR}
+                    className="pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
             )}
           </>
         )}
@@ -278,7 +316,7 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
       {expanded && hasChildren && (
         <div>
           {childrenArray.map((child) => (
-            <TreeNode key={child.path} node={child} level={level + 1} onEditPhotos={onEditPhotos} />
+            <TreeNode key={child.path} node={child} level={level + 1} onEditPhotos={onEditPhotos} onEditDate={onEditDate} />
           ))}
         </div>
       )}
@@ -316,6 +354,14 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
     });
   };
 
+  const handleEditDate = (photoIds: string[], date: Date) => {
+    const dateIso = format(date, 'yyyy-MM-dd');
+    const yearMonth = format(date, 'yyyy-MM');
+    photoIds.forEach(id => {
+      onUpdatePhoto(id, { dateIso, yearMonth });
+    });
+  };
+
   if (photos.length === 0) return null;
 
   return (
@@ -349,7 +395,7 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
 
       {/* Estrutura em árvore editável */}
       <div className="max-h-80 overflow-y-auto border border-border rounded-lg bg-muted/30 p-2">
-        <TreeNode node={tree} onEditPhotos={handleEditPhotos} />
+        <TreeNode node={tree} onEditPhotos={handleEditPhotos} onEditDate={handleEditDate} />
       </div>
 
       {/* Legenda */}
