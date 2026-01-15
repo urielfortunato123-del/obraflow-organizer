@@ -6,6 +6,7 @@ import { PhotoCard } from '@/components/PhotoCard';
 import { ProgressBar } from '@/components/ProgressBar';
 import { ActionButtons } from '@/components/ActionButtons';
 import { FolderTreeView } from '@/components/FolderTreeView';
+import { BatchEditPanel } from '@/components/BatchEditPanel';
 import type { PhotoData, AppSettings } from '@/types/photo';
 import { DEFAULT_SETTINGS } from '@/types/photo';
 import { generateId, extractDateFromText, extractCoordinatesFromText } from '@/utils/helpers';
@@ -83,6 +84,17 @@ const Index = () => {
       prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
     );
   }, []);
+
+  // Atualiza múltiplas fotos em lote
+  const handleBatchUpdate = useCallback((ids: string[], updates: Partial<PhotoData>) => {
+    setPhotos((prev) =>
+      prev.map((p) => (ids.includes(p.id) ? { ...p, ...updates } : p))
+    );
+    toast({
+      title: 'Atualização em lote',
+      description: `${ids.length} foto(s) atualizada(s)`,
+    });
+  }, [toast]);
 
   // Exclui foto individual
   const handleDeletePhoto = useCallback((id: string) => {
@@ -343,6 +355,14 @@ const Index = () => {
         {/* Estrutura de pastas */}
         {photos.length > 0 && (
           <FolderTreeView files={photos.map(p => p.file)} />
+        )}
+
+        {/* Edição em lote */}
+        {photos.length > 0 && (
+          <BatchEditPanel 
+            photos={photos} 
+            onBatchUpdate={handleBatchUpdate} 
+          />
         )}
 
         {/* Barra de progresso */}
