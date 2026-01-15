@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { 
   MapPin, Calendar, FileText, CheckCircle, AlertCircle, Clock, 
-  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen 
+  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy 
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -30,9 +31,11 @@ interface PhotoCardProps {
   photo: PhotoData;
   onUpdate: (id: string, updates: Partial<PhotoData>) => void;
   onDelete?: (id: string) => void;
+  onApplyToAll?: (field: 'local' | 'servico', value: string) => void;
+  onApplyToSimilar?: (field: 'local' | 'servico', value: string) => void;
 }
 
-export function PhotoCard({ photo, onUpdate, onDelete }: PhotoCardProps) {
+export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSimilar }: PhotoCardProps) {
   const [editingLocal, setEditingLocal] = useState(false);
   const [editingServico, setEditingServico] = useState(false);
   const [editingOcr, setEditingOcr] = useState(false);
@@ -260,14 +263,32 @@ export function PhotoCard({ photo, onUpdate, onDelete }: PhotoCardProps) {
                     </button>
                   </div>
                 ) : (
-                  <div 
-                    className="flex items-center gap-2 cursor-pointer group"
-                    onClick={() => setEditingLocal(true)}
-                  >
-                    <span className="text-sm text-foreground truncate">
-                      {photo.local || 'Não definido'}
-                    </span>
-                    <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer group flex-1 min-w-0"
+                      onClick={() => setEditingLocal(true)}
+                    >
+                      <span className={`text-sm truncate ${
+                        photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
+                          ? 'text-warning' 
+                          : 'text-foreground'
+                      }`}>
+                        {photo.local || 'Não definido'}
+                      </span>
+                      <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    </div>
+                    {photo.local && photo.local !== 'LOCAL_NAO_INFORMADO' && onApplyToAll && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onApplyToAll('local', photo.local!)}
+                        className="h-6 px-2 text-xs text-accent hover:text-accent hover:bg-accent/10"
+                        title="Aplicar este local em todas as fotos"
+                      >
+                        <Copy className="w-3 h-3 mr-1" />
+                        Aplicar em todas
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -291,14 +312,32 @@ export function PhotoCard({ photo, onUpdate, onDelete }: PhotoCardProps) {
                     </button>
                   </div>
                 ) : (
-                  <div 
-                    className="flex items-center gap-2 cursor-pointer group"
-                    onClick={() => setEditingServico(true)}
-                  >
-                    <span className="text-sm text-foreground truncate">
-                      {photo.servico || 'Não definido'}
-                    </span>
-                    <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer group flex-1 min-w-0"
+                      onClick={() => setEditingServico(true)}
+                    >
+                      <span className={`text-sm truncate ${
+                        photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico 
+                          ? 'text-warning' 
+                          : 'text-foreground'
+                      }`}>
+                        {photo.servico || 'Não definido'}
+                      </span>
+                      <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    </div>
+                    {photo.servico && photo.servico !== 'SERVICO_NAO_IDENTIFICADO' && onApplyToAll && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onApplyToAll('servico', photo.servico!)}
+                        className="h-6 px-2 text-xs text-accent hover:text-accent hover:bg-accent/10"
+                        title="Aplicar este serviço em todas as fotos"
+                      >
+                        <Copy className="w-3 h-3 mr-1" />
+                        Aplicar em todas
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
