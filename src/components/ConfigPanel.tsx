@@ -162,8 +162,41 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
           {/* Dica do modo lite */}
           {settings.liteMode && (
             <div className="text-xs text-muted-foreground bg-accent/30 rounded-lg px-3 py-2 border border-accent/50">
-              💡 <strong>Modo Lite:</strong> OCR 3-5x mais rápido (imagem reduzida, só português). 
+              💡 <strong>Modo Lite:</strong> OCR Engine 1 (mais rápido). 
               A IA compensa eventuais falhas de leitura.
+            </div>
+          )}
+
+          {/* Configurações de OCR.space */}
+          {settings.ocrEnabled && (
+            <div className="space-y-4 p-4 rounded-lg bg-muted/50 border border-border">
+              <h3 className="text-sm font-semibold text-foreground">OCR.space API</h3>
+              <p className="text-xs text-muted-foreground">
+                Obtenha sua chave gratuita em <a href="https://ocr.space/ocrapi" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ocr.space/ocrapi</a> (25.000 req/mês grátis)
+              </p>
+              
+              <div className="space-y-2">
+                <Label htmlFor="ocrApiKey" className="text-sm font-medium">
+                  Chave da API OCR
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="ocrApiKey"
+                    type={showApiKey ? 'text' : 'password'}
+                    placeholder="K1234567890..."
+                    value={settings.ocrApiKey}
+                    onChange={(e) => updateSetting('ocrApiKey', e.target.value)}
+                    className="input-industrial pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
