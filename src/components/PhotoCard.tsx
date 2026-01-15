@@ -487,7 +487,7 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
         </div>
       </div>
 
-      {/* Lightbox */}
+      {/* Lightbox Modal */}
       <PhotoLightbox
         imageUrl={photo.thumbnailUrl}
         filename={photo.filename}
