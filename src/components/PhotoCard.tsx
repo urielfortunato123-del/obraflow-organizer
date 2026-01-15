@@ -4,8 +4,9 @@ import {
   Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AutocompleteInput } from '@/components/AutocompleteInput';
+import { FRENTES_DE_OBRA, DISCIPLINAS, SERVICOS } from '@/data/constructionTerms';
 import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
@@ -365,20 +366,14 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   Frente {(photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente) && '⚠️'}
                 </label>
                 {editingFrente ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      value={frenteValue}
-                      onChange={(e) => setFrenteValue(e.target.value)}
-                      className="h-8 text-sm"
-                      autoFocus
-                    />
-                    <button onClick={handleSaveFrente} className="p-1 text-success hover:bg-success/10 rounded">
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button onClick={handleCancelFrente} className="p-1 text-destructive hover:bg-destructive/10 rounded">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <AutocompleteInput
+                    value={frenteValue}
+                    onChange={setFrenteValue}
+                    onSave={handleSaveFrente}
+                    onCancel={handleCancelFrente}
+                    suggestions={FRENTES_DE_OBRA}
+                    placeholder="Digite a frente..."
+                  />
                 ) : (
                   <div className="flex items-center gap-2">
                     <div 
@@ -423,20 +418,14 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   Disciplina {(photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina) && '⚠️'}
                 </label>
                 {editingDisciplina ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      value={disciplinaValue}
-                      onChange={(e) => setDisciplinaValue(e.target.value)}
-                      className="h-8 text-sm"
-                      autoFocus
-                    />
-                    <button onClick={handleSaveDisciplina} className="p-1 text-success hover:bg-success/10 rounded">
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button onClick={handleCancelDisciplina} className="p-1 text-destructive hover:bg-destructive/10 rounded">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <AutocompleteInput
+                    value={disciplinaValue}
+                    onChange={setDisciplinaValue}
+                    onSave={handleSaveDisciplina}
+                    onCancel={handleCancelDisciplina}
+                    suggestions={DISCIPLINAS}
+                    placeholder="Digite a disciplina..."
+                  />
                 ) : (
                   <div className="flex items-center gap-2">
                     <div 
@@ -470,20 +459,14 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   Serviço {(photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico) && '⚠️'}
                 </label>
                 {editingServico ? (
-                  <div className="flex items-center gap-1">
-                    <Input
-                      value={servicoValue}
-                      onChange={(e) => setServicoValue(e.target.value)}
-                      className="h-8 text-sm"
-                      autoFocus
-                    />
-                    <button onClick={handleSaveServico} className="p-1 text-success hover:bg-success/10 rounded">
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button onClick={handleCancelServico} className="p-1 text-destructive hover:bg-destructive/10 rounded">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <AutocompleteInput
+                    value={servicoValue}
+                    onChange={setServicoValue}
+                    onSave={handleSaveServico}
+                    onCancel={handleCancelServico}
+                    suggestions={SERVICOS}
+                    placeholder="Digite o serviço..."
+                  />
                 ) : (
                   <div className="flex items-center gap-2">
                     <div 
