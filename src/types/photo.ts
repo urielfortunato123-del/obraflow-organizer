@@ -12,19 +12,26 @@ export interface PhotoData {
   // Extracted data
   dateIso: string | null;
   yearMonth: string | null;
-  day: string | null; // Dia do mês (ex: "30")
+  day: string | null;
+  hora: string | null; // Hora extraída (ex: "10:36")
   latitude: number | null;
   longitude: number | null;
   
   // AI Classification
-  local: string;
-  categoria: string; // ACABAMENTO EXTERNO, COBERTURA, MANUTENÇÃO, etc.
-  servico: string; // PINTURA EXTERNA, etc.
+  frente: string; // FRENTE DE SERVIÇO (ex: FREE_FLOW_P09, BSO_04)
+  disciplina: string; // DISCIPLINA (ex: TERRAPLANAGEM, ACABAMENTO, SINALIZAÇÃO)
+  servico: string; // SERVIÇO (ex: LIMPEZA_TERRENO, ALVENARIA)
   aiStatus: 'pending' | 'processing' | 'success' | 'error' | 'skipped';
   aiConfidence: number | null;
   
+  // Alertas
+  alertas: string[]; // Ex: ["SEM PLACA DE IDENTIFICAÇÃO"]
+  
   // Overall status
   status: 'OK' | 'OCR Falhou' | 'IA Falhou' | 'Pendente';
+  
+  // Caminho de destino calculado
+  destinationPath?: string;
 }
 
 export interface AppSettings {
@@ -51,10 +58,12 @@ export interface AppSettings {
 }
 
 export interface AIResponse {
-  local: string;
-  categoria: string;
+  frente: string;
+  disciplina: string;
   servico: string;
   year_month: string;
+  hora?: string;
+  alertas?: string[];
   confianca: number;
 }
 
@@ -73,10 +82,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liteMode: true,
 };
 
-// Categorias de trabalho (nível 2 da estrutura)
-export const WORK_CATEGORIES = [
-  'ACABAMENTO EXTERNO',
-  'ACABAMENTO INTERNO',
+// Disciplinas de trabalho
+export const DISCIPLINAS = [
+  'TERRAPLANAGEM',
+  'SINALIZAÇÃO',
+  'ACABAMENTO',
   'COBERTURA',
   'MANUTENÇÃO',
   'SEGURANÇA',
@@ -84,30 +94,36 @@ export const WORK_CATEGORIES = [
   'FUNDAÇÃO',
   'INSTALAÇÕES ELÉTRICAS',
   'INSTALAÇÕES HIDRÁULICAS',
-  'TERRAPLANAGEM',
   'PAVIMENTAÇÃO',
   'DRENAGEM',
-  'SINALIZAÇÃO',
   'PAISAGISMO',
   'DEMOLIÇÃO',
   'LIMPEZA',
+  'OUTROS',
 ];
 
-// Tipos de serviço (nível 3 da estrutura)
-export const SERVICE_TYPES = [
-  'PINTURA EXTERNA',
-  'PINTURA INTERNA',
+// Tipos de serviço
+export const SERVICOS = [
+  'LIMPEZA_TERRENO',
+  'LIMPEZA_INICIAL',
+  'EXECUÇÃO_LIMPEZA',
+  'ALVENARIA',
+  'PINTURA_EXTERNA',
+  'PINTURA_INTERNA',
   'REBOCO',
   'REVESTIMENTO',
-  'EXECUÇÃO DE LIMPEZA',
   'ESCAVAÇÃO',
   'REATERRO',
   'CONCRETAGEM',
   'RECOMPOSIÇÃO',
   'ROÇADA',
   'INSTALAÇÃO',
-  'MANUTENÇÃO PREVENTIVA',
-  'MANUTENÇÃO CORRETIVA',
+  'MANUTENÇÃO_PREVENTIVA',
+  'MANUTENÇÃO_CORRETIVA',
+  'DISPOSITIVO_SEGURANÇA',
+  'SINALIZAÇÃO_VERTICAL',
+  'SINALIZAÇÃO_HORIZONTAL',
   'INSPEÇÃO',
   'VISTORIA',
+  'OUTROS',
 ];

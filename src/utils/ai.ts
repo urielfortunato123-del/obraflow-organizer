@@ -7,7 +7,7 @@ interface AIClassificationInput {
   yearMonth: string | null;
   latitude: number | null;
   longitude: number | null;
-  userLocal: string;
+  userFrente: string;
   userServico: string;
   liteMode?: boolean;
 }
@@ -30,7 +30,7 @@ export async function classifyWithAI(
         yearMonth: input.yearMonth,
         latitude: input.latitude,
         longitude: input.longitude,
-        userLocal: input.userLocal,
+        userFrente: input.userFrente,
         userServico: input.userServico,
         liteMode: input.liteMode,
       },
@@ -46,15 +46,17 @@ export async function classifyWithAI(
     }
 
     const parsed: AIResponse = {
-      local: data.local,
-      categoria: data.categoria || '',
-      servico: data.servico,
-      year_month: data.year_month,
-      confianca: data.confianca,
+      frente: data.frente || data.local || '',
+      disciplina: data.disciplina || data.categoria || '',
+      servico: data.servico || '',
+      year_month: data.year_month || '',
+      hora: data.hora || '',
+      alertas: data.alertas || [],
+      confianca: data.confianca || 0,
     };
 
     // Validação básica
-    if (!parsed.local || !parsed.servico) {
+    if (!parsed.frente || !parsed.servico) {
       throw new Error('Resposta da IA incompleta');
     }
 
@@ -76,5 +78,5 @@ export async function classifyWithAI(
  * Verifica se a IA está disponível (online)
  */
 export function isAIAvailable(settings: AppSettings): boolean {
-  return navigator.onLine && settings.aiEnabled;
+  return navigator.onLine && settings.prioridadeIA;
 }

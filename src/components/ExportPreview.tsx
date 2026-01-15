@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { PhotoData } from '@/types/photo';
-import { WORK_CATEGORIES, SERVICE_TYPES } from '@/types/photo';
+import { DISCIPLINAS, SERVICOS } from '@/types/photo';
 import { normalizeName } from '@/utils/helpers';
 
 interface ExportPreviewProps {
@@ -19,7 +19,7 @@ interface FolderNode {
   name: string;
   displayName: string;
   path: string;
-  level: 'local' | 'categoria' | 'servico' | 'mes' | 'dia';
+  level: 'frente' | 'disciplina' | 'servico' | 'mes' | 'dia';
   imageCount: number;
   images: { id: string; filename: string }[];
   children: Map<string, FolderNode>;
@@ -45,58 +45,58 @@ function buildExportTree(photos: PhotoData[]): FolderNode {
     name: 'ZIP',
     displayName: 'ZIP',
     path: '',
-    level: 'local',
+    level: 'frente',
     imageCount: 0,
     images: [],
     children: new Map(),
   };
 
-  const processedPhotos = photos.filter(p => p.status === 'OK' || p.local || p.servico);
+  const processedPhotos = photos.filter(p => p.status === 'OK' || p.frente || p.servico);
 
   for (const photo of processedPhotos) {
-    const local = normalizeName(photo.local || 'LOCAL_NAO_INFORMADO');
-    const categoria = normalizeName(photo.categoria || 'CATEGORIA_NAO_INFORMADA');
+    const frente = normalizeName(photo.frente || 'FRENTE_NAO_INFORMADA');
+    const disciplina = normalizeName(photo.disciplina || 'DISCIPLINA_NAO_INFORMADA');
     const servico = normalizeName(photo.servico || 'SERVICO_NAO_INFORMADO');
     const mes = formatYearMonth(photo.yearMonth);
     const dia = formatDay(photo.dateIso);
     
-    // Estrutura: LOCAL > CATEGORIA > SERVIÇO > MÊS > DIA > fotos
+    // Estrutura: FRENTE > DISCIPLINA > SERVIÇO > MÊS > DIA > fotos
     let currentNode = root;
     
-    // Nível 1: Local
-    if (!currentNode.children.has(local)) {
-      currentNode.children.set(local, {
-        name: local,
-        displayName: photo.local || 'LOCAL NÃO INFORMADO',
-        path: local,
-        level: 'local',
+    // Nível 1: Frente
+    if (!currentNode.children.has(frente)) {
+      currentNode.children.set(frente, {
+        name: frente,
+        displayName: photo.frente || 'FRENTE NÃO INFORMADA',
+        path: frente,
+        level: 'frente',
         imageCount: 0,
         images: [],
         children: new Map(),
       });
     }
-    currentNode = currentNode.children.get(local)!;
+    currentNode = currentNode.children.get(frente)!;
     
-    // Nível 2: Categoria
-    if (!currentNode.children.has(categoria)) {
-      currentNode.children.set(categoria, {
-        name: categoria,
-        displayName: photo.categoria || 'CATEGORIA NÃO INFORMADA',
-        path: `${local}/${categoria}`,
-        level: 'categoria',
+    // Nível 2: Disciplina
+    if (!currentNode.children.has(disciplina)) {
+      currentNode.children.set(disciplina, {
+        name: disciplina,
+        displayName: photo.disciplina || 'DISCIPLINA NÃO INFORMADA',
+        path: `${frente}/${disciplina}`,
+        level: 'disciplina',
         imageCount: 0,
         images: [],
         children: new Map(),
       });
     }
-    currentNode = currentNode.children.get(categoria)!;
+    currentNode = currentNode.children.get(disciplina)!;
     
     // Nível 3: Serviço
     if (!currentNode.children.has(servico)) {
       currentNode.children.set(servico, {
         name: servico,
         displayName: photo.servico || 'SERVIÇO NÃO INFORMADO',
-        path: `${local}/${categoria}/${servico}`,
+        path: `${frente}/${disciplina}/${servico}`,
         level: 'servico',
         imageCount: 0,
         images: [],
@@ -110,7 +110,7 @@ function buildExportTree(photos: PhotoData[]): FolderNode {
       currentNode.children.set(mes, {
         name: mes,
         displayName: mes,
-        path: `${local}/${categoria}/${servico}/${mes}`,
+        path: `${frente}/${disciplina}/${servico}/${mes}`,
         level: 'mes',
         imageCount: 0,
         images: [],
@@ -124,7 +124,7 @@ function buildExportTree(photos: PhotoData[]): FolderNode {
       currentNode.children.set(dia, {
         name: dia,
         displayName: dia,
-        path: `${local}/${categoria}/${servico}/${mes}/${dia}`,
+        path: `${frente}/${disciplina}/${servico}/${mes}/${dia}`,
         level: 'dia',
         imageCount: 0,
         images: [],
@@ -155,7 +155,7 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
   const hasChildren = node.children.size > 0;
   const hasImages = node.imageCount > 0;
   const isWarning = node.name.includes('NAO_INFORMAD');
-  const isEditable = ['local', 'categoria', 'servico'].includes(node.level);
+  const isEditable = ['frente', 'disciplina', 'servico'].includes(node.level);
 
   const childrenArray = Array.from(node.children.values());
   
@@ -172,8 +172,8 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
     if (onEditPhotos && editValue.trim()) {
       const photoIds = getAllPhotoIds(node);
       const fieldMap: Record<string, string> = {
-        'local': 'local',
-        'categoria': 'categoria',
+        'frente': 'frente',
+        'disciplina': 'disciplina',
         'servico': 'servico',
       };
       const field = fieldMap[node.level];
@@ -208,14 +208,14 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
         
         {editing ? (
           <div className="flex items-center gap-1 flex-1">
-            {node.level === 'categoria' ? (
+            {node.level === 'disciplina' ? (
               <Select value={editValue} onValueChange={setEditValue}>
                 <SelectTrigger className="h-7 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {WORK_CATEGORIES.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  {DISCIPLINAS.map(disc => (
+                    <SelectItem key={disc} value={disc}>{disc}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -225,7 +225,7 @@ function TreeNode({ node, level = 0, onEditPhotos }: TreeNodeProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SERVICE_TYPES.map(svc => (
+                  {SERVICOS.map(svc => (
                     <SelectItem key={svc} value={svc}>{svc}</SelectItem>
                   ))}
                 </SelectContent>
@@ -290,22 +290,22 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
   const tree = useMemo(() => buildExportTree(photos), [photos]);
   
   const stats = useMemo(() => {
-    const processedPhotos = photos.filter(p => p.status === 'OK' || p.local || p.servico);
+    const processedPhotos = photos.filter(p => p.status === 'OK' || p.frente || p.servico);
     const pendingPhotos = photos.filter(p => 
-      (p.local === 'LOCAL_NAO_INFORMADO' || !p.local) ||
-      (p.categoria === 'CATEGORIA_NAO_INFORMADA' || !p.categoria) ||
+      (p.frente === 'FRENTE_NAO_INFORMADA' || !p.frente) ||
+      (p.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !p.disciplina) ||
       (p.servico === 'SERVICO_NAO_IDENTIFICADO' || !p.servico)
     );
-    const locais = new Set(processedPhotos.map(p => p.local).filter(Boolean));
-    const categorias = new Set(processedPhotos.map(p => p.categoria).filter(Boolean));
+    const frentes = new Set(processedPhotos.map(p => p.frente).filter(Boolean));
+    const disciplinas = new Set(processedPhotos.map(p => p.disciplina).filter(Boolean));
     const servicos = new Set(processedPhotos.map(p => p.servico).filter(Boolean));
     
     return {
       total: photos.length,
       processed: processedPhotos.length,
       pending: pendingPhotos.length,
-      locais: locais.size,
-      categorias: categorias.size,
+      frentes: frentes.size,
+      disciplinas: disciplinas.size,
       servicos: servicos.size,
     };
   }, [photos]);
@@ -326,9 +326,9 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
           Estrutura de saída (Editável)
         </h3>
         <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-          <span>{stats.locais} local</span>
+          <span>{stats.frentes} frente</span>
           <span>•</span>
-          <span>{stats.categorias} categoria</span>
+          <span>{stats.disciplinas} disciplina</span>
           <span>•</span>
           <span>{stats.servicos} serviço</span>
           <span>•</span>
@@ -354,11 +354,11 @@ export function ExportPreview({ photos, onUpdatePhoto, onExportZip, onExportCSV,
 
       {/* Legenda */}
       <div className="text-xs text-muted-foreground space-y-1 p-2 bg-muted/30 rounded-lg">
-        <p><strong>Estrutura:</strong> LOCAL / CATEGORIA / SERVIÇO / MÊS / DIA / fotos</p>
+        <p><strong>Estrutura:</strong> FRENTE / DISCIPLINA / SERVIÇO / MÊS / DIA / fotos</p>
         <p>
           <strong>Exemplo:</strong>{' '}
           <code className="bg-muted px-1 rounded text-[10px]">
-            Free_Flow_P09/ACABAMENTO_EXTERNO/PINTURA_EXTERNA/08_AGOSTO_2025/30_08/foto.jpg
+            FREE_FLOW_P09/TERRAPLANAGEM/LIMPEZA_TERRENO/08_AGOSTO_2025/31_08/foto.jpg
           </code>
         </p>
       </div>
