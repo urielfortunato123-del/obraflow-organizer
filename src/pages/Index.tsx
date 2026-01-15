@@ -113,7 +113,7 @@ const Index = () => {
       try {
         // OCR
         if (settings.ocrEnabled) {
-          setProgressLabel(`OCR${settings.liteMode ? ' (Lite)' : ''}: ${photo.filename}`);
+          setProgressLabel(`OCR Vision: ${photo.filename}`);
           setProgressSubLabel(`${processed + 1} de ${total}`);
 
           handleUpdatePhoto(photo.id, { ocrStatus: 'processing' });
@@ -121,7 +121,7 @@ const Index = () => {
           try {
             const ocrResult = await processOCR(
               photo.file, 
-              { apiKey: settings.ocrApiKey, liteMode: settings.liteMode },
+              { apiKey: settings.ocrApiKey, liteMode: settings.liteMode, useVision: true },
               (p) => {
                 setProgress((processed / total) * 100 + (p / total) * 0.5);
               }
@@ -130,16 +130,31 @@ const Index = () => {
             const { dateIso, yearMonth } = extractDateFromText(ocrResult.text);
             const coords = extractCoordinatesFromText(ocrResult.text);
 
-            // Fallback para lastModified se não encontrou data
+            // Tenta extrair data do campo date retornado pelo Vision
             let finalDateIso = dateIso;
             let finalYearMonth = yearMonth;
             
-            if (!dateIso && photo.file.lastModified) {
+            if (!dateIso && ocrResult.date) {
+              // Tenta parsear a data do Vision (formato DD/MM/YYYY HH:MM)
+              const dateParts = ocrResult.date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+              if (dateParts) {
+                const [, day, month, year] = dateParts;
+                finalDateIso = `${year}-${month}-${day}`;
+                finalYearMonth = `${year}-${month}`;
+              }
+            }
+
+            // Fallback para lastModified se não encontrou data
+            if (!finalDateIso && photo.file.lastModified) {
               const fallbackDate = new Date(photo.file.lastModified);
               finalDateIso = fallbackDate.toISOString().split('T')[0];
               finalYearMonth = `${fallbackDate.getFullYear()}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}`;
               console.log(`[OCR] Usando lastModified como fallback: ${finalDateIso}`);
             }
+
+            // Usa local/serviço do Vision se disponível
+            const visionLocal = ocrResult.local || undefined;
+            const visionServico = ocrResult.servico || undefined;
 
             handleUpdatePhoto(photo.id, {
               ocrText: ocrResult.text,
@@ -148,6 +163,9 @@ const Index = () => {
               yearMonth: finalYearMonth,
               latitude: coords.latitude,
               longitude: coords.longitude,
+              // Se o Vision já extraiu local/serviço, usa eles
+              ...(visionLocal && { local: visionLocal }),
+              ...(visionServico && { servico: visionServico }),
             });
 
           } catch (ocrError) {

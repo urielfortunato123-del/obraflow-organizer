@@ -1,25 +1,32 @@
+import { supabase } from '@/integrations/supabase/client';
+
 export interface OCRResult {
   text: string;
   confidence: number;
+  date?: string | null;
+  local?: string | null;
+  servico?: string | null;
 }
 
 export interface OCROptions {
-  apiKey: string;
-  liteMode?: boolean; // Usa engine mais leve
+  apiKey?: string;
+  liteMode?: boolean;
+  useVision?: boolean; // Usar Gemini Vision ao invés de OCR.space
 }
 
 const OCR_SPACE_API = 'https://api.ocr.space/parse/image';
 
 /**
- * Converte File para base64
+ * Converte File para base64 (retorna só o conteúdo, sem prefixo)
  */
-async function fileToBase64(file: File): Promise<string> {
+async function fileToBase64Content(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
       // Remove o prefixo data:image/...;base64,
-      resolve(result);
+      const base64 = result.split(',')[1];
+      resolve(base64);
     };
     reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
     reader.readAsDataURL(file);
@@ -27,13 +34,26 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * Redimensiona imagem para OCR mais rápido (modo lite)
+ * Converte File para base64 (com prefixo completo)
+ */
+async function fileToBase64Full(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(reader.result as string);
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Redimensiona imagem para OCR mais rápido
  */
 async function resizeImageForOCR(file: File, maxWidth: number = 1024): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      // Se já é menor, retorna original
       if (img.width <= maxWidth) {
         URL.revokeObjectURL(img.src);
         resolve(file);
@@ -72,11 +92,76 @@ async function resizeImageForOCR(file: File, maxWidth: number = 1024): Promise<F
 }
 
 /**
- * Processa OCR usando OCR.space API
- * - Gratuito: 25.000 requisições/mês
- * - Engines: 1 (rápido), 2 (preciso), 3 (melhor para texto manuscrito)
+ * Processa OCR usando Gemini Vision (Lovable AI)
+ * Muito mais preciso para textos em fotos
  */
-export async function processOCR(
+async function processOCRVision(
+  imageFile: File,
+  onProgress?: (progress: number) => void
+): Promise<OCRResult> {
+  console.log(`[OCR Vision] Iniciando processamento com Gemini: ${imageFile.name}`);
+  onProgress?.(10);
+
+  try {
+    // Redimensiona se muito grande (limite de ~4MB para base64)
+    let processFile = imageFile;
+    if (imageFile.size > 2 * 1024 * 1024) {
+      console.log(`[OCR Vision] Redimensionando imagem grande: ${(imageFile.size / 1024 / 1024).toFixed(1)}MB`);
+      processFile = await resizeImageForOCR(imageFile, 1600);
+      console.log(`[OCR Vision] Novo tamanho: ${(processFile.size / 1024 / 1024).toFixed(1)}MB`);
+    }
+
+    onProgress?.(30);
+
+    // Converte para base64
+    const base64Content = await fileToBase64Content(processFile);
+    const mimeType = processFile.type || 'image/jpeg';
+    
+    onProgress?.(50);
+
+    // Chama edge function
+    const { data, error } = await supabase.functions.invoke('ocr-vision', {
+      body: {
+        imageBase64: base64Content,
+        mimeType,
+      },
+    });
+
+    onProgress?.(90);
+
+    if (error) {
+      console.error('[OCR Vision] Erro na edge function:', error);
+      throw new Error(error.message || 'Erro no OCR Vision');
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    console.log(`[OCR Vision] Concluído: ${imageFile.name}`);
+    console.log(`[OCR Vision] Texto: ${data.text?.substring(0, 200)}`);
+    console.log(`[OCR Vision] Local: ${data.local}, Serviço: ${data.servico}`);
+
+    onProgress?.(100);
+
+    return {
+      text: data.text || '',
+      confidence: data.confidence || 0,
+      date: data.date,
+      local: data.local,
+      servico: data.servico,
+    };
+
+  } catch (error) {
+    console.error(`[OCR Vision] Erro ao processar ${imageFile.name}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Processa OCR usando OCR.space API (fallback)
+ */
+async function processOCRSpace(
   imageFile: File,
   options: OCROptions,
   onProgress?: (progress: number) => void
@@ -101,8 +186,8 @@ export async function processOCR(
 
     onProgress?.(30);
 
-    // Converte para base64
-    const base64 = await fileToBase64(processFile);
+    // Converte para base64 (com prefixo)
+    const base64 = await fileToBase64Full(processFile);
     
     onProgress?.(50);
 
@@ -110,11 +195,11 @@ export async function processOCR(
     const formData = new FormData();
     formData.append('apikey', apiKey);
     formData.append('base64Image', base64);
-    formData.append('language', 'por'); // Português
+    formData.append('language', 'por');
     formData.append('isOverlayRequired', 'false');
     formData.append('detectOrientation', 'true');
     formData.append('scale', 'true');
-    formData.append('OCREngine', liteMode ? '1' : '2'); // Engine 1 = rápido, 2 = preciso
+    formData.append('OCREngine', liteMode ? '1' : '2');
 
     onProgress?.(60);
 
@@ -144,8 +229,6 @@ export async function processOCR(
     }
 
     const text = parsedResults.map((r: any) => r.ParsedText || '').join('\n').trim();
-    
-    // OCR.space não retorna confiança direta, estimamos pelo exit code
     const exitCode = parsedResults[0]?.FileParseExitCode || 0;
     const confidence = exitCode === 1 ? 85 : exitCode === 0 ? 95 : 50;
 
@@ -160,6 +243,37 @@ export async function processOCR(
     console.error(`[OCR.space] Erro ao processar ${imageFile.name}:`, error);
     throw error;
   }
+}
+
+/**
+ * Processa OCR de uma imagem
+ * Por padrão usa Gemini Vision (mais preciso)
+ * Se falhar ou se useVision=false, usa OCR.space como fallback
+ */
+export async function processOCR(
+  imageFile: File,
+  options: OCROptions,
+  onProgress?: (progress: number) => void
+): Promise<OCRResult> {
+  const useVision = options.useVision !== false; // Padrão é true
+
+  if (useVision) {
+    try {
+      return await processOCRVision(imageFile, onProgress);
+    } catch (error) {
+      console.warn('[OCR] Gemini Vision falhou, tentando OCR.space como fallback...');
+      
+      // Se temos API key do OCR.space, tenta como fallback
+      if (options.apiKey) {
+        return await processOCRSpace(imageFile, options, onProgress);
+      }
+      
+      throw error;
+    }
+  }
+
+  // Usa OCR.space diretamente
+  return await processOCRSpace(imageFile, options, onProgress);
 }
 
 /**
