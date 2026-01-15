@@ -84,6 +84,21 @@ const Index = () => {
     );
   }, []);
 
+  // Exclui foto individual
+  const handleDeletePhoto = useCallback((id: string) => {
+    setPhotos((prev) => {
+      const photo = prev.find(p => p.id === id);
+      if (photo) {
+        URL.revokeObjectURL(photo.thumbnailUrl);
+      }
+      return prev.filter(p => p.id !== id);
+    });
+    toast({
+      title: 'Foto excluída',
+      description: 'A foto foi removida da lista',
+    });
+  }, [toast]);
+
   // Processa OCR + IA
   const handleProcess = useCallback(async () => {
     if (photos.length === 0) return;
@@ -354,6 +369,7 @@ const Index = () => {
                   key={photo.id}
                   photo={photo}
                   onUpdate={handleUpdatePhoto}
+                  onDelete={handleDeletePhoto}
                 />
               ))}
             </div>
