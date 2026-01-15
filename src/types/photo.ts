@@ -25,7 +25,8 @@ export interface PhotoData {
 }
 
 export interface AppSettings {
-  apiKey: string;
+  apiKey: string; // API IA
+  ocrApiKey: string; // API OCR.space
   endpoint: string;
   model: string;
   ocrEnabled: boolean;
@@ -44,6 +45,7 @@ export interface AIResponse {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
+  ocrApiKey: '',
   endpoint: 'https://api.openai.com/v1/chat/completions',
   model: 'gpt-4o-mini',
   ocrEnabled: true,

@@ -96,10 +96,10 @@ const Index = () => {
           try {
             const ocrResult = await processOCR(
               photo.file, 
+              { apiKey: settings.ocrApiKey, liteMode: settings.liteMode },
               (p) => {
                 setProgress((processed / total) * 100 + (p / total) * 0.5);
-              },
-              { liteMode: settings.liteMode }
+              }
             );
 
             const { dateIso, yearMonth } = extractDateFromText(ocrResult.text);
