@@ -296,8 +296,18 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
             {/* Local e Serviço editáveis */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Local */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Local</label>
+              <div className={`space-y-1 p-2 rounded-lg transition-colors ${
+                photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
+                  ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
+                  : ''
+              }`}>
+                <label className={`text-xs font-medium ${
+                  photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
+                    ? 'text-warning' 
+                    : 'text-muted-foreground'
+                }`}>
+                  Local {(photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local) && '⚠️'}
+                </label>
                 {editingLocal ? (
                   <div className="flex items-center gap-1">
                     <Input
@@ -321,10 +331,10 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
                     >
                       <span className={`text-sm truncate ${
                         photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
-                          ? 'text-warning' 
+                          ? 'text-warning font-medium' 
                           : 'text-foreground'
                       }`}>
-                        {photo.local || 'Não definido'}
+                        {photo.local || 'Clique para definir'}
                       </span>
                       <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                     </div>
@@ -345,8 +355,18 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
               </div>
 
               {/* Serviço */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Serviço</label>
+              <div className={`space-y-1 p-2 rounded-lg transition-colors ${
+                photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico 
+                  ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
+                  : ''
+              }`}>
+                <label className={`text-xs font-medium ${
+                  photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico 
+                    ? 'text-warning' 
+                    : 'text-muted-foreground'
+                }`}>
+                  Serviço {(photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico) && '⚠️'}
+                </label>
                 {editingServico ? (
                   <div className="flex items-center gap-1">
                     <Input
@@ -370,10 +390,10 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
                     >
                       <span className={`text-sm truncate ${
                         photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico 
-                          ? 'text-warning' 
+                          ? 'text-warning font-medium' 
                           : 'text-foreground'
                       }`}>
-                        {photo.servico || 'Não definido'}
+                        {photo.servico || 'Clique para definir'}
                       </span>
                       <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                     </div>
