@@ -3,6 +3,7 @@ export interface PhotoData {
   file: File;
   thumbnailUrl: string;
   filename: string;
+  folderPath: string; // Caminho relativo da pasta de origem
   
   // OCR results
   ocrText: string;
