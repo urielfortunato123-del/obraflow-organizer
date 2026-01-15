@@ -29,11 +29,25 @@ export interface PhotoData {
 
 export interface AppSettings {
   ocrApiKey: string; // API OCR.space
+  
+  // Campos padrão
+  defaultLocal: string; // Empresa/Cliente - pasta raiz
+  defaultServico: string; // Frente de serviço padrão
+  
+  // Opções de processamento
+  organizePorData: boolean; // Cria subpastas mes_ano/dia_mes
+  prioridadeIA: boolean; // Usa análise avançada com Gemini/GPT
+  ocrLocal: boolean; // Extrai texto antes da IA (-60% custo)
+  modoEconomico: boolean; // 2x mais fotos por $ (modelo leve)
+  correcaoIA: boolean; // Corrige erros de OCR automaticamente
+  
+  // Dicionário OCR personalizado
+  ocrDictionary: string[];
+  
+  // Legacy (para compatibilidade)
   ocrEnabled: boolean;
   aiEnabled: boolean;
-  liteMode: boolean; // OCR rápido + IA compensa
-  defaultLocal: string;
-  defaultServico: string;
+  liteMode: boolean;
 }
 
 export interface AIResponse {
@@ -46,11 +60,17 @@ export interface AIResponse {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   ocrApiKey: '',
-  ocrEnabled: true,
-  aiEnabled: true,
-  liteMode: true, // Modo econômico ativo por padrão
   defaultLocal: '',
   defaultServico: '',
+  organizePorData: true,
+  prioridadeIA: true,
+  ocrLocal: true,
+  modoEconomico: true,
+  correcaoIA: true,
+  ocrDictionary: [],
+  ocrEnabled: true,
+  aiEnabled: true,
+  liteMode: true,
 };
 
 // Categorias de trabalho (nível 2 da estrutura)

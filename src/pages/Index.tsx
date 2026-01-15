@@ -127,7 +127,7 @@ const Index = () => {
     for (const photo of photos) {
       try {
         // OCR
-        if (settings.ocrEnabled) {
+        if (settings.ocrLocal) {
           setProgressLabel(`OCR Vision: ${photo.filename}`);
           setProgressSubLabel(`${processed + 1} de ${total}`);
 
@@ -136,7 +136,7 @@ const Index = () => {
           try {
             const ocrResult = await processOCR(
               photo.file, 
-              { apiKey: settings.ocrApiKey, liteMode: settings.liteMode, useVision: true },
+              { apiKey: settings.ocrApiKey, liteMode: settings.modoEconomico, useVision: true },
               (p) => {
                 setProgress((processed / total) * 100 + (p / total) * 0.5);
               }
@@ -200,7 +200,7 @@ const Index = () => {
         const currentPhoto = photos.find(p => p.id === photo.id);
         const updatedPhoto = { ...photo, ...currentPhoto };
 
-        if (settings.aiEnabled && isAIAvailable(settings)) {
+        if (settings.prioridadeIA && isAIAvailable(settings)) {
           setProgressLabel(`IA: ${photo.filename}`);
           
           handleUpdatePhoto(photo.id, { aiStatus: 'processing' });
@@ -215,7 +215,7 @@ const Index = () => {
                 longitude: updatedPhoto.longitude,
                 userLocal: updatedPhoto.local || settings.defaultLocal,
                 userServico: updatedPhoto.servico || settings.defaultServico,
-                liteMode: settings.liteMode,
+                liteMode: settings.modoEconomico,
               },
               settings
             );
