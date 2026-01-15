@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { 
   CheckCircle2, Edit3, ChevronDown, ChevronUp, 
-  MapPin, Wrench, Check, X, Copy
+  Building2, Wrench, Check, X, Copy
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,17 +21,17 @@ interface BatchEditPanelProps {
 export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [localValue, setLocalValue] = useState('');
+  const [frenteValue, setFrenteValue] = useState('');
   const [servicoValue, setServicoValue] = useState('');
 
   // Agrupa valores únicos encontrados
   const uniqueValues = useMemo(() => {
-    const locals = new Map<string, number>();
+    const frentes = new Map<string, number>();
     const servicos = new Map<string, number>();
 
     photos.forEach(photo => {
-      if (photo.local && photo.local !== 'LOCAL_NAO_INFORMADO') {
-        locals.set(photo.local, (locals.get(photo.local) || 0) + 1);
+      if (photo.frente && photo.frente !== 'FRENTE_NAO_INFORMADA') {
+        frentes.set(photo.frente, (frentes.get(photo.frente) || 0) + 1);
       }
       if (photo.servico && photo.servico !== 'SERVICO_NAO_IDENTIFICADO') {
         servicos.set(photo.servico, (servicos.get(photo.servico) || 0) + 1);
@@ -39,7 +39,7 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
     });
 
     return {
-      locals: Array.from(locals.entries()).sort((a, b) => b[1] - a[1]),
+      frentes: Array.from(frentes.entries()).sort((a, b) => b[1] - a[1]),
       servicos: Array.from(servicos.entries()).sort((a, b) => b[1] - a[1]),
     };
   }, [photos]);
@@ -47,9 +47,9 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
   // Fotos com valores padrão/não identificados
   const photosWithDefaultValues = useMemo(() => {
     return photos.filter(
-      p => p.local === 'LOCAL_NAO_INFORMADO' || 
+      p => p.frente === 'FRENTE_NAO_INFORMADA' || 
            p.servico === 'SERVICO_NAO_IDENTIFICADO' ||
-           !p.local || !p.servico
+           !p.frente || !p.servico
     );
   }, [photos]);
 
@@ -75,13 +75,13 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
     setSelectedIds(newSet);
   };
 
-  const handleApplyLocal = () => {
-    if (!localValue.trim()) return;
+  const handleApplyFrente = () => {
+    if (!frenteValue.trim()) return;
     const targetIds = selectedIds.size > 0 
       ? Array.from(selectedIds) 
       : photos.map(p => p.id);
-    onBatchUpdate(targetIds, { local: localValue.trim() });
-    setLocalValue('');
+    onBatchUpdate(targetIds, { frente: frenteValue.trim() });
+    setFrenteValue('');
   };
 
   const handleApplyServico = () => {
@@ -93,11 +93,11 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
     setServicoValue('');
   };
 
-  const handleQuickApplyLocal = (value: string) => {
+  const handleQuickApplyFrente = (value: string) => {
     const targetIds = selectedIds.size > 0 
       ? Array.from(selectedIds) 
       : photos.map(p => p.id);
-    onBatchUpdate(targetIds, { local: value });
+    onBatchUpdate(targetIds, { frente: value });
   };
 
   const handleQuickApplyServico = (value: string) => {
@@ -124,7 +124,7 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
                 }
                 {photosWithDefaultValues.length > 0 && (
                   <span className="text-warning ml-2">
-                    • {photosWithDefaultValues.length} sem local/serviço definido
+                    • {photosWithDefaultValues.length} sem frente/serviço definido
                   </span>
                 )}
               </p>
@@ -175,22 +175,22 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
               )}
             </div>
 
-            {/* Aplicar Local */}
+            {/* Aplicar Frente */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <MapPin className="w-4 h-4 text-accent" />
-                Aplicar Local
+                <Building2 className="w-4 h-4 text-accent" />
+                Aplicar Frente de Serviço
               </label>
               <div className="flex gap-2">
                 <Input
-                  value={localValue}
-                  onChange={(e) => setLocalValue(e.target.value)}
-                  placeholder="Digite o nome do local..."
+                  value={frenteValue}
+                  onChange={(e) => setFrenteValue(e.target.value)}
+                  placeholder="Ex: FREE_FLOW_P09, BSO_04..."
                   className="flex-1"
                 />
                 <Button 
-                  onClick={handleApplyLocal}
-                  disabled={!localValue.trim()}
+                  onClick={handleApplyFrente}
+                  disabled={!frenteValue.trim()}
                   className="btn-accent"
                 >
                   <Check className="w-4 h-4 mr-1" />
@@ -198,14 +198,14 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
                 </Button>
               </div>
               
-              {/* Sugestões de Local */}
-              {uniqueValues.locals.length > 0 && (
+              {/* Sugestões de Frente */}
+              {uniqueValues.frentes.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   <span className="text-xs text-muted-foreground mr-1">Sugestões:</span>
-                  {uniqueValues.locals.slice(0, 5).map(([value, count]) => (
+                  {uniqueValues.frentes.slice(0, 5).map(([value, count]) => (
                     <button
                       key={value}
-                      onClick={() => handleQuickApplyLocal(value)}
+                      onClick={() => handleQuickApplyFrente(value)}
                       className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-accent/10 text-accent rounded hover:bg-accent/20 transition-colors"
                       title={`Aplicar "${value}" (${count} foto(s) já usam)`}
                     >
@@ -228,7 +228,7 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
                 <Input
                   value={servicoValue}
                   onChange={(e) => setServicoValue(e.target.value)}
-                  placeholder="Digite o nome do serviço..."
+                  placeholder="Ex: LIMPEZA_TERRENO, ALVENARIA..."
                   className="flex-1"
                 />
                 <Button 
@@ -287,8 +287,8 @@ export function BatchEditPanel({ photos, onBatchUpdate }: BatchEditPanelProps) {
                           {photo.filename}
                         </p>
                         <div className="flex gap-2 text-xs text-muted-foreground">
-                          <span className={photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local ? 'text-warning' : ''}>
-                            {photo.local || 'Sem local'}
+                          <span className={photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente ? 'text-warning' : ''}>
+                            {photo.frente || 'Sem frente'}
                           </span>
                           <span>•</span>
                           <span className={photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico ? 'text-warning' : ''}>

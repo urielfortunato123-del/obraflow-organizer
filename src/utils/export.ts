@@ -28,7 +28,7 @@ function formatDayFolder(dateIso: string | null): string {
 
 /**
  * Gera o arquivo ZIP com a estrutura de pastas organizada
- * Estrutura: LOCAL / CATEGORIA / SERVIÇO / MÊS / DIA / fotos
+ * Estrutura: FRENTE / DISCIPLINA / SERVIÇO / MÊS / DIA / fotos
  */
 export async function generateZip(
   photos: PhotoData[],
@@ -37,36 +37,36 @@ export async function generateZip(
   console.log('[ZIP] Iniciando geração do ZIP...');
   
   const zip = new JSZip();
-  const processedPhotos = photos.filter(p => p.status === 'OK' || p.local || p.servico);
+  const processedPhotos = photos.filter(p => p.status === 'OK' || p.frente || p.servico);
   
   if (processedPhotos.length === 0) {
     throw new Error('Nenhuma foto processada para exportar');
   }
 
-  // Verifica se há múltiplos locais
-  const uniqueLocals = new Set(processedPhotos.map(p => p.local || 'LOCAL_NAO_INFORMADO'));
+  // Verifica se há múltiplas frentes
+  const uniqueFrentes = new Set(processedPhotos.map(p => p.frente || 'FRENTE_NAO_INFORMADA'));
   const timestamp = formatTimestamp();
 
   let zipName: string;
-  if (uniqueLocals.size === 1 && !uniqueLocals.has('LOCAL_NAO_INFORMADO')) {
-    const localName = normalizeName([...uniqueLocals][0]);
-    zipName = `${localName}_Organizado_${timestamp}.zip`;
+  if (uniqueFrentes.size === 1 && !uniqueFrentes.has('FRENTE_NAO_INFORMADA')) {
+    const frenteName = normalizeName([...uniqueFrentes][0]);
+    zipName = `${frenteName}_Organizado_${timestamp}.zip`;
   } else {
     zipName = `Organizado_${timestamp}.zip`;
   }
 
   // Adiciona cada foto na estrutura correta
-  // Estrutura: LOCAL / CATEGORIA / SERVIÇO / MÊS / DIA / foto
+  // Estrutura: FRENTE / DISCIPLINA / SERVIÇO / MÊS / DIA / foto
   for (let i = 0; i < processedPhotos.length; i++) {
     const photo = processedPhotos[i];
     
-    const localFolder = normalizeName(photo.local || 'LOCAL_NAO_INFORMADO');
-    const categoriaFolder = normalizeName(photo.categoria || 'CATEGORIA_NAO_INFORMADA');
+    const frenteFolder = normalizeName(photo.frente || 'FRENTE_NAO_INFORMADA');
+    const disciplinaFolder = normalizeName(photo.disciplina || 'DISCIPLINA_NAO_INFORMADA');
     const servicoFolder = normalizeName(photo.servico || 'SERVICO_NAO_INFORMADO');
     const mesFolder = formatYearMonthFolder(photo.yearMonth);
     const diaFolder = formatDayFolder(photo.dateIso);
     
-    const folderPath = `${localFolder}/${categoriaFolder}/${servicoFolder}/${mesFolder}/${diaFolder}`;
+    const folderPath = `${frenteFolder}/${disciplinaFolder}/${servicoFolder}/${mesFolder}/${diaFolder}`;
     const filePath = `${folderPath}/${photo.filename}`;
     
     // Lê o arquivo como ArrayBuffer
@@ -102,16 +102,22 @@ export function generateCSV(photos: PhotoData[]): void {
     'date_iso',
     'year_month',
     'day',
-    'local',
-    'categoria',
+    'hora',
+    'frente',
+    'disciplina',
     'servico',
     'latitude',
     'longitude',
+    'alertas',
+    'confianca',
     'ocr_text'
   ];
 
-  const escapeCSV = (value: string | number | null): string => {
+  const escapeCSV = (value: string | number | null | string[]): string => {
     if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) {
+      return `"${value.join('; ')}"`;
+    }
     const str = String(value);
     // Escapa aspas duplas e envolve em aspas se necessário
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -125,11 +131,14 @@ export function generateCSV(photos: PhotoData[]): void {
     escapeCSV(photo.dateIso),
     escapeCSV(photo.yearMonth),
     escapeCSV(photo.day),
-    escapeCSV(photo.local),
-    escapeCSV(photo.categoria),
+    escapeCSV(photo.hora),
+    escapeCSV(photo.frente),
+    escapeCSV(photo.disciplina),
     escapeCSV(photo.servico),
     escapeCSV(photo.latitude),
     escapeCSV(photo.longitude),
+    escapeCSV(photo.alertas),
+    escapeCSV(photo.aiConfidence),
     escapeCSV(photo.ocrText),
   ].join(','));
 

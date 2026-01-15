@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { 
   MapPin, Calendar, FileText, CheckCircle, AlertCircle, Clock, 
-  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2 
+  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,35 +32,35 @@ interface PhotoCardProps {
   photo: PhotoData;
   onUpdate: (id: string, updates: Partial<PhotoData>) => void;
   onDelete?: (id: string) => void;
-  onApplyToAll?: (field: 'local' | 'servico', value: string) => void;
-  onApplyToSimilar?: (field: 'local' | 'servico', value: string) => void;
+  onApplyToAll?: (field: 'frente' | 'servico', value: string) => void;
+  onApplyToSimilar?: (field: 'frente' | 'servico', value: string) => void;
 }
 
-export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSimilar }: PhotoCardProps) {
-  const [editingLocal, setEditingLocal] = useState(false);
+export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCardProps) {
+  const [editingFrente, setEditingFrente] = useState(false);
   const [editingServico, setEditingServico] = useState(false);
   const [editingOcr, setEditingOcr] = useState(false);
-  const [localValue, setLocalValue] = useState(photo.local);
+  const [frenteValue, setFrenteValue] = useState(photo.frente);
   const [servicoValue, setServicoValue] = useState(photo.servico);
   const [ocrValue, setOcrValue] = useState(photo.ocrText);
   const [showLightbox, setShowLightbox] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Parse OCR para extrair sugestões de local/serviço
+  // Parse OCR para extrair sugestões
   const ocrSuggestion = useMemo(() => {
     return parseOCRForLocalServico(photo.ocrText);
   }, [photo.ocrText]);
 
   const hasOcrSuggestion = ocrSuggestion.local || ocrSuggestion.servico;
   const needsUpdate = 
-    (photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local) ||
+    (photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente) ||
     (photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico);
 
   const handleApplyFromOCR = () => {
     const updates: Partial<PhotoData> = {};
     if (ocrSuggestion.local) {
-      updates.local = ocrSuggestion.local;
-      setLocalValue(ocrSuggestion.local);
+      updates.frente = ocrSuggestion.local;
+      setFrenteValue(ocrSuggestion.local);
     }
     if (ocrSuggestion.servico) {
       updates.servico = ocrSuggestion.servico;
@@ -70,9 +71,9 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
     }
   };
 
-  const handleSaveLocal = () => {
-    onUpdate(photo.id, { local: localValue });
-    setEditingLocal(false);
+  const handleSaveFrente = () => {
+    onUpdate(photo.id, { frente: frenteValue });
+    setEditingFrente(false);
   };
 
   const handleSaveServico = () => {
@@ -85,9 +86,9 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
     setEditingOcr(false);
   };
 
-  const handleCancelLocal = () => {
-    setLocalValue(photo.local);
-    setEditingLocal(false);
+  const handleCancelFrente = () => {
+    setFrenteValue(photo.frente);
+    setEditingFrente(false);
   };
 
   const handleCancelServico = () => {
@@ -104,6 +105,31 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
     onDelete?.(photo.id);
     setShowDeleteDialog(false);
   };
+
+  // Gera o caminho de destino
+  const destinationPath = useMemo(() => {
+    const frente = photo.frente || 'FRENTE_NAO_INFORMADA';
+    const disciplina = photo.disciplina || 'DISCIPLINA_NAO_INFORMADA';
+    const servico = photo.servico || 'SERVICO_NAO_INFORMADO';
+    
+    let mesFolder = 'SEM_DATA';
+    if (photo.yearMonth) {
+      const [year, month] = photo.yearMonth.split('-');
+      const monthNames = ['', 'JANEIRO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+      const monthNum = parseInt(month, 10);
+      mesFolder = `${month}_${monthNames[monthNum] || 'MES'}_${year}`;
+    }
+    
+    let diaFolder = 'SEM_DIA';
+    if (photo.dateIso) {
+      const parts = photo.dateIso.split('-');
+      if (parts.length >= 3) {
+        diaFolder = `${parts[2]}_${parts[1]}`;
+      }
+    }
+    
+    return `${frente}/${disciplina}/${servico}/${mesFolder}/${diaFolder}`;
+  }, [photo.frente, photo.disciplina, photo.servico, photo.yearMonth, photo.dateIso]);
 
   const StatusBadge = () => {
     switch (photo.status) {
@@ -142,7 +168,7 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
     <>
       <div className="card-industrial p-4 animate-fade-in hover:shadow-industrial-lg transition-shadow duration-300">
         <div className="flex flex-col sm:flex-row gap-4">
-          {/* Thumbnail - clicável para zoom */}
+          {/* Thumbnail */}
           <div className="flex-shrink-0 relative group">
             <img
               src={photo.thumbnailUrl}
@@ -175,7 +201,6 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge />
-                {/* Menu de ações */}
                 <DropdownMenu>
                   <DropdownMenuTrigger className="p-1 rounded hover:bg-muted transition-colors">
                     <MoreVertical className="w-4 h-4 text-muted-foreground" />
@@ -251,14 +276,14 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
               </div>
             )}
 
-            {/* Botão Aplicar do OCR - mostra quando há sugestão e campos pendentes */}
+            {/* Botão Aplicar do OCR */}
             {hasOcrSuggestion && needsUpdate && (
               <div className="flex items-center gap-2 p-2 bg-accent/10 border border-accent/30 rounded-lg">
                 <Wand2 className="w-4 h-4 text-accent flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground">Sugestão do OCR:</p>
                   <p className="text-sm text-foreground truncate">
-                    {ocrSuggestion.local && <span><strong>Local:</strong> {ocrSuggestion.local}</span>}
+                    {ocrSuggestion.local && <span><strong>Frente:</strong> {ocrSuggestion.local}</span>}
                     {ocrSuggestion.local && ocrSuggestion.servico && <span className="mx-1">•</span>}
                     {ocrSuggestion.servico && <span><strong>Serviço:</strong> {ocrSuggestion.servico}</span>}
                   </p>
@@ -277,49 +302,68 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
               </div>
             )}
 
-            {/* Data e GPS */}
+            {/* Alertas */}
+            {photo.alertas && photo.alertas.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {photo.alertas.map((alerta, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-warning/20 text-warning text-xs rounded border border-warning/30">
+                    <AlertTriangle className="w-3 h-3" />
+                    {alerta}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Data, Hora e GPS */}
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-accent" />
                 <span className="text-foreground">{formatDate(photo.dateIso)}</span>
+                {photo.hora && <span className="text-muted-foreground">às {photo.hora}</span>}
               </div>
               {photo.latitude !== null && (
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-accent" />
-                  <span className="text-foreground text-xs">
+                <a 
+                  href={`https://maps.google.com/?q=${photo.latitude},${photo.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-accent hover:underline"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span className="text-xs">
                     {photo.latitude.toFixed(4)}, {photo.longitude?.toFixed(4)}
                   </span>
-                </div>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               )}
             </div>
 
-            {/* Local e Serviço editáveis */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Local */}
+            {/* Frente e Serviço editáveis */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Frente */}
               <div className={`space-y-1 p-2 rounded-lg transition-colors ${
-                photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
+                photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente 
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
                 <label className={`text-xs font-medium ${
-                  photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
+                  photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
-                  Local {(photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local) && '⚠️'}
+                  Frente {(photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente) && '⚠️'}
                 </label>
-                {editingLocal ? (
+                {editingFrente ? (
                   <div className="flex items-center gap-1">
                     <Input
-                      value={localValue}
-                      onChange={(e) => setLocalValue(e.target.value)}
+                      value={frenteValue}
+                      onChange={(e) => setFrenteValue(e.target.value)}
                       className="h-8 text-sm"
                       autoFocus
                     />
-                    <button onClick={handleSaveLocal} className="p-1 text-success hover:bg-success/10 rounded">
+                    <button onClick={handleSaveFrente} className="p-1 text-success hover:bg-success/10 rounded">
                       <Check className="w-4 h-4" />
                     </button>
-                    <button onClick={handleCancelLocal} className="p-1 text-destructive hover:bg-destructive/10 rounded">
+                    <button onClick={handleCancelFrente} className="p-1 text-destructive hover:bg-destructive/10 rounded">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -327,31 +371,38 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
                   <div className="flex items-center gap-2">
                     <div 
                       className="flex items-center gap-2 cursor-pointer group flex-1 min-w-0"
-                      onClick={() => setEditingLocal(true)}
+                      onClick={() => setEditingFrente(true)}
                     >
-                      <span className={`text-sm truncate ${
-                        photo.local === 'LOCAL_NAO_INFORMADO' || !photo.local 
-                          ? 'text-warning font-medium' 
+                      <span className={`text-sm truncate font-semibold ${
+                        photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente 
+                          ? 'text-warning' 
                           : 'text-foreground'
                       }`}>
-                        {photo.local || 'Clique para definir'}
+                        {photo.frente || 'Clique para definir'}
                       </span>
                       <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                     </div>
-                    {photo.local && photo.local !== 'LOCAL_NAO_INFORMADO' && onApplyToAll && (
+                    {photo.frente && photo.frente !== 'FRENTE_NAO_INFORMADA' && onApplyToAll && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onApplyToAll('local', photo.local!)}
+                        onClick={() => onApplyToAll('frente', photo.frente!)}
                         className="h-6 px-2 text-xs text-accent hover:text-accent hover:bg-accent/10"
-                        title="Aplicar este local em todas as fotos"
+                        title="Aplicar em todas as fotos"
                       >
-                        <Copy className="w-3 h-3 mr-1" />
-                        Aplicar em todas
+                        <Copy className="w-3 h-3" />
                       </Button>
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Disciplina (read-only) */}
+              <div className="space-y-1 p-2 rounded-lg">
+                <label className="text-xs font-medium text-muted-foreground">Disciplina</label>
+                <p className="text-sm text-foreground font-medium truncate">
+                  {photo.disciplina || '-'}
+                </p>
               </div>
 
               {/* Serviço */}
@@ -403,10 +454,9 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
                         size="sm"
                         onClick={() => onApplyToAll('servico', photo.servico!)}
                         className="h-6 px-2 text-xs text-accent hover:text-accent hover:bg-accent/10"
-                        title="Aplicar este serviço em todas as fotos"
+                        title="Aplicar em todas as fotos"
                       >
-                        <Copy className="w-3 h-3 mr-1" />
-                        Aplicar em todas
+                        <Copy className="w-3 h-3" />
                       </Button>
                     )}
                   </div>
@@ -414,10 +464,23 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
               </div>
             </div>
 
-            {/* Confiança da IA */}
+            {/* Confiança da IA e Caminho de destino */}
             {photo.aiConfidence !== null && (
-              <div className="text-xs text-muted-foreground">
-                Confiança IA: {photo.aiConfidence}%
+              <div className="space-y-2 p-3 bg-muted/30 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Confiança IA</span>
+                  <span className={`font-semibold ${photo.aiConfidence >= 90 ? 'text-success' : photo.aiConfidence >= 70 ? 'text-warning' : 'text-destructive'}`}>
+                    {photo.aiConfidence}%
+                  </span>
+                </div>
+                <Progress value={photo.aiConfidence} className="h-1.5" />
+                
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mb-1">Caminho de destino:</p>
+                  <code className="text-[10px] text-accent bg-muted px-2 py-1 rounded block truncate">
+                    {destinationPath}
+                  </code>
+                </div>
               </div>
             )}
           </div>
@@ -431,8 +494,9 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
         isOpen={showLightbox}
         onClose={() => setShowLightbox(false)}
       />
+      )}
 
-      {/* Dialog de confirmação de exclusão */}
+      {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -443,7 +507,7 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll, onApplyToSi
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -62,13 +62,15 @@ const Index = () => {
         dateIso: null,
         yearMonth: null,
         day: null,
+        hora: null,
         latitude: null,
         longitude: null,
-        local: settings.defaultLocal,
-        categoria: '',
+        frente: settings.defaultLocal,
+        disciplina: '',
         servico: settings.defaultServico,
         aiStatus: 'pending' as const,
         aiConfidence: null,
+        alertas: [],
         status: 'Pendente' as const,
       };
     });
@@ -148,6 +150,7 @@ const Index = () => {
             // Tenta extrair data do campo date retornado pelo Vision
             let finalDateIso = dateIso;
             let finalYearMonth = yearMonth;
+            let finalHora = null;
             
             if (!dateIso && ocrResult.date) {
               // Tenta parsear a data do Vision (formato DD/MM/YYYY HH:MM)
@@ -156,6 +159,11 @@ const Index = () => {
                 const [, day, month, year] = dateParts;
                 finalDateIso = `${year}-${month}-${day}`;
                 finalYearMonth = `${year}-${month}`;
+              }
+              // Extrai hora
+              const timeParts = ocrResult.date.match(/(\d{2}):(\d{2})/);
+              if (timeParts) {
+                finalHora = `${timeParts[1]}:${timeParts[2]}`;
               }
             }
 
@@ -170,8 +178,8 @@ const Index = () => {
             // Extrai o dia da data
             const finalDay = finalDateIso ? finalDateIso.split('-')[2] : null;
 
-            // Usa local/serviço do Vision se disponível
-            const visionLocal = ocrResult.local || undefined;
+            // Usa frente/serviço do Vision se disponível
+            const visionFrente = ocrResult.local || undefined;
             const visionServico = ocrResult.servico || undefined;
 
             handleUpdatePhoto(photo.id, {
@@ -180,10 +188,11 @@ const Index = () => {
               dateIso: finalDateIso,
               yearMonth: finalYearMonth,
               day: finalDay,
+              hora: finalHora,
               latitude: coords.latitude,
               longitude: coords.longitude,
-              // Se o Vision já extraiu local/serviço, usa eles
-              ...(visionLocal && { local: visionLocal }),
+              // Se o Vision já extraiu frente/serviço, usa eles
+              ...(visionFrente && { frente: visionFrente }),
               ...(visionServico && { servico: visionServico }),
             });
 
@@ -213,7 +222,7 @@ const Index = () => {
                 yearMonth: updatedPhoto.yearMonth,
                 latitude: updatedPhoto.latitude,
                 longitude: updatedPhoto.longitude,
-                userLocal: updatedPhoto.local || settings.defaultLocal,
+                userFrente: updatedPhoto.frente || settings.defaultLocal,
                 userServico: updatedPhoto.servico || settings.defaultServico,
                 liteMode: settings.modoEconomico,
               },
@@ -221,10 +230,12 @@ const Index = () => {
             );
 
             handleUpdatePhoto(photo.id, {
-              local: aiResult.local,
-              categoria: aiResult.categoria,
+              frente: aiResult.frente,
+              disciplina: aiResult.disciplina,
               servico: aiResult.servico,
               yearMonth: aiResult.year_month || updatedPhoto.yearMonth,
+              hora: aiResult.hora || updatedPhoto.hora,
+              alertas: aiResult.alertas || [],
               aiStatus: 'success',
               aiConfidence: aiResult.confianca,
               status: 'OK',
@@ -275,12 +286,12 @@ const Index = () => {
 
   // Gera ZIP
   const handleGenerateZip = useCallback(async () => {
-    const processedPhotos = photos.filter(p => p.status === 'OK' || p.local || p.servico);
+    const processedPhotos = photos.filter(p => p.status === 'OK' || p.frente || p.servico);
     
     if (processedPhotos.length === 0) {
       toast({
         title: 'Nenhuma foto para exportar',
-        description: 'Processe as fotos primeiro ou defina local/serviço manualmente',
+        description: 'Processe as fotos primeiro ou defina frente/serviço manualmente',
         variant: 'destructive',
       });
       return;
@@ -344,7 +355,7 @@ const Index = () => {
     });
   }, [photos, toast]);
 
-  const processedCount = photos.filter(p => p.status === 'OK' || p.local || p.servico).length;
+  const processedCount = photos.filter(p => p.status === 'OK' || p.frente || p.servico).length;
 
   return (
     <div className="min-h-screen bg-background">
