@@ -143,7 +143,29 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
                 Modo IA {!online && '(requer internet)'}
               </Label>
             </div>
+
+            <div className="flex items-center gap-3">
+              <Switch
+                id="liteMode"
+                checked={settings.liteMode}
+                onCheckedChange={(checked) => updateSetting('liteMode', checked)}
+              />
+              <Label htmlFor="liteMode" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs font-bold">
+                  LITE
+                </span>
+                OCR Rápido + IA
+              </Label>
+            </div>
           </div>
+
+          {/* Dica do modo lite */}
+          {settings.liteMode && (
+            <div className="text-xs text-muted-foreground bg-accent/30 rounded-lg px-3 py-2 border border-accent/50">
+              💡 <strong>Modo Lite:</strong> OCR 3-5x mais rápido (imagem reduzida, só português). 
+              A IA compensa eventuais falhas de leitura.
+            </div>
+          )}
 
           {/* Configurações de IA */}
           {settings.aiEnabled && (

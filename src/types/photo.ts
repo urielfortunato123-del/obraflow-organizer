@@ -30,6 +30,7 @@ export interface AppSettings {
   model: string;
   ocrEnabled: boolean;
   aiEnabled: boolean;
+  liteMode: boolean; // OCR rápido + IA compensa
   defaultLocal: string;
   defaultServico: string;
 }
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   model: 'gpt-4o-mini',
   ocrEnabled: true,
   aiEnabled: true,
+  liteMode: true, // Modo econômico ativo por padrão
   defaultLocal: '',
   defaultServico: '',
 };

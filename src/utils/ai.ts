@@ -9,6 +9,7 @@ interface AIClassificationInput {
   longitude: number | null;
   userLocal: string;
   userServico: string;
+  liteMode?: boolean; // Indica se OCR foi processado em modo lite
 }
 
 /**
@@ -23,6 +24,12 @@ export async function classifyWithAI(
   if (!settings.apiKey) {
     throw new Error('Chave da API não configurada');
   }
+
+  const liteModeNote = input.liteMode 
+    ? `\n\nNOTA IMPORTANTE: O texto OCR foi processado em modo LITE (imagem reduzida, qualidade menor).
+Pode conter erros de leitura. Tente inferir palavras parciais ou corrompidas pelo contexto.
+Exemplo: "Escav" pode ser "Escavação", "Pav" pode ser "Pavimentação", etc.`
+    : '';
 
   const systemPrompt = `Você é um assistente especializado em classificar fotos de obras de construção.
 Analise o texto OCR fornecido e retorne APENAS um JSON válido (sem markdown, sem explicações) com a seguinte estrutura:
@@ -39,7 +46,7 @@ Regras:
 3. Se serviço não foi fornecido, classifique baseado no texto OCR. Categorias sugeridas: ${SERVICE_CATEGORIES.join(', ')}.
 4. Se não conseguir inferir o local com segurança, use "LOCAL_NAO_INFORMADO".
 5. Para year_month, use a data detectada. Não invente mês.
-6. A confiança deve refletir quão certo você está da classificação.`;
+6. A confiança deve refletir quão certo você está da classificação.${liteModeNote}`;
 
   const userContent = `Classifique esta foto de obra:
 
