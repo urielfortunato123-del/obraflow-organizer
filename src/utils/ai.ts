@@ -47,6 +47,7 @@ export async function classifyWithAI(
 
     const parsed: AIResponse = {
       local: data.local,
+      categoria: data.categoria || '',
       servico: data.servico,
       year_month: data.year_month,
       confianca: data.confianca,

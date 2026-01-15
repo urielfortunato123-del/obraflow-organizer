@@ -61,9 +61,11 @@ const Index = () => {
         ocrStatus: 'pending' as const,
         dateIso: null,
         yearMonth: null,
+        day: null,
         latitude: null,
         longitude: null,
         local: settings.defaultLocal,
+        categoria: '',
         servico: settings.defaultServico,
         aiStatus: 'pending' as const,
         aiConfidence: null,
@@ -165,6 +167,9 @@ const Index = () => {
               console.log(`[OCR] Usando lastModified como fallback: ${finalDateIso}`);
             }
 
+            // Extrai o dia da data
+            const finalDay = finalDateIso ? finalDateIso.split('-')[2] : null;
+
             // Usa local/serviço do Vision se disponível
             const visionLocal = ocrResult.local || undefined;
             const visionServico = ocrResult.servico || undefined;
@@ -174,6 +179,7 @@ const Index = () => {
               ocrStatus: 'success',
               dateIso: finalDateIso,
               yearMonth: finalYearMonth,
+              day: finalDay,
               latitude: coords.latitude,
               longitude: coords.longitude,
               // Se o Vision já extraiu local/serviço, usa eles
@@ -216,6 +222,7 @@ const Index = () => {
 
             handleUpdatePhoto(photo.id, {
               local: aiResult.local,
+              categoria: aiResult.categoria,
               servico: aiResult.servico,
               yearMonth: aiResult.year_month || updatedPhoto.yearMonth,
               aiStatus: 'success',
@@ -370,6 +377,7 @@ const Index = () => {
         {photos.length > 0 && (
           <ExportPreview
             photos={photos}
+            onUpdatePhoto={handleUpdatePhoto}
             onExportZip={handleGenerateZip}
             onExportCSV={handleDownloadCSV}
             isExporting={isExporting}

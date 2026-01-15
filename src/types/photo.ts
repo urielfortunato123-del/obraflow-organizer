@@ -12,12 +12,14 @@ export interface PhotoData {
   // Extracted data
   dateIso: string | null;
   yearMonth: string | null;
+  day: string | null; // Dia do mês (ex: "30")
   latitude: number | null;
   longitude: number | null;
   
   // AI Classification
   local: string;
-  servico: string;
+  categoria: string; // ACABAMENTO EXTERNO, COBERTURA, MANUTENÇÃO, etc.
+  servico: string; // PINTURA EXTERNA, etc.
   aiStatus: 'pending' | 'processing' | 'success' | 'error' | 'skipped';
   aiConfidence: number | null;
   
@@ -36,6 +38,7 @@ export interface AppSettings {
 
 export interface AIResponse {
   local: string;
+  categoria: string;
   servico: string;
   year_month: string;
   confianca: number;
@@ -50,20 +53,41 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultServico: '',
 };
 
-export const SERVICE_CATEGORIES = [
-  'Execução de limpeza',
-  'Escavação',
-  'Reaterro',
-  'Drenagem',
-  'Concretagem',
-  'Recomposição',
-  'Terraplenagem',
-  'Sinalização',
-  'Roçada',
-  'Pavimentação',
-  'Instalação elétrica',
-  'Instalação hidráulica',
-  'Fundação',
-  'Estrutura',
-  'Acabamento',
+// Categorias de trabalho (nível 2 da estrutura)
+export const WORK_CATEGORIES = [
+  'ACABAMENTO EXTERNO',
+  'ACABAMENTO INTERNO',
+  'COBERTURA',
+  'MANUTENÇÃO',
+  'SEGURANÇA',
+  'ESTRUTURA',
+  'FUNDAÇÃO',
+  'INSTALAÇÕES ELÉTRICAS',
+  'INSTALAÇÕES HIDRÁULICAS',
+  'TERRAPLANAGEM',
+  'PAVIMENTAÇÃO',
+  'DRENAGEM',
+  'SINALIZAÇÃO',
+  'PAISAGISMO',
+  'DEMOLIÇÃO',
+  'LIMPEZA',
+];
+
+// Tipos de serviço (nível 3 da estrutura)
+export const SERVICE_TYPES = [
+  'PINTURA EXTERNA',
+  'PINTURA INTERNA',
+  'REBOCO',
+  'REVESTIMENTO',
+  'EXECUÇÃO DE LIMPEZA',
+  'ESCAVAÇÃO',
+  'REATERRO',
+  'CONCRETAGEM',
+  'RECOMPOSIÇÃO',
+  'ROÇADA',
+  'INSTALAÇÃO',
+  'MANUTENÇÃO PREVENTIVA',
+  'MANUTENÇÃO CORRETIVA',
+  'INSPEÇÃO',
+  'VISTORIA',
 ];

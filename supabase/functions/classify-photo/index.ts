@@ -5,22 +5,43 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SERVICE_CATEGORIES = [
-  'Execução de limpeza',
-  'Escavação',
-  'Reaterro',
-  'Drenagem',
-  'Concretagem',
-  'Recomposição',
-  'Terraplenagem',
-  'Sinalização',
-  'Roçada',
-  'Pavimentação',
-  'Instalação elétrica',
-  'Instalação hidráulica',
-  'Fundação',
-  'Estrutura',
-  'Acabamento',
+// Categorias de trabalho (nível 2 da estrutura)
+const WORK_CATEGORIES = [
+  'ACABAMENTO EXTERNO',
+  'ACABAMENTO INTERNO',
+  'COBERTURA',
+  'MANUTENÇÃO',
+  'SEGURANÇA',
+  'ESTRUTURA',
+  'FUNDAÇÃO',
+  'INSTALAÇÕES ELÉTRICAS',
+  'INSTALAÇÕES HIDRÁULICAS',
+  'TERRAPLANAGEM',
+  'PAVIMENTAÇÃO',
+  'DRENAGEM',
+  'SINALIZAÇÃO',
+  'PAISAGISMO',
+  'DEMOLIÇÃO',
+  'LIMPEZA',
+];
+
+// Tipos de serviço (nível 3 da estrutura)
+const SERVICE_TYPES = [
+  'PINTURA EXTERNA',
+  'PINTURA INTERNA',
+  'REBOCO',
+  'REVESTIMENTO',
+  'EXECUÇÃO DE LIMPEZA',
+  'ESCAVAÇÃO',
+  'REATERRO',
+  'CONCRETAGEM',
+  'RECOMPOSIÇÃO',
+  'ROÇADA',
+  'INSTALAÇÃO',
+  'MANUTENÇÃO PREVENTIVA',
+  'MANUTENÇÃO CORRETIVA',
+  'INSPEÇÃO',
+  'VISTORIA',
 ];
 
 interface ClassifyRequest {
@@ -57,19 +78,27 @@ Exemplo: "Escav" pode ser "Escavação", "Pav" pode ser "Pavimentação", etc.`
     const systemPrompt = `Você é um assistente especializado em classificar fotos de obras de construção.
 Analise o texto OCR fornecido e retorne APENAS um JSON válido (sem markdown, sem explicações) com a seguinte estrutura:
 {
-  "local": "string curta e clara do local da obra",
-  "servico": "string curta e clara do tipo de serviço",
+  "local": "string curta e clara do local da obra (ex: Free Flow P-09, Pórtico 12)",
+  "categoria": "categoria do trabalho em MAIÚSCULAS",
+  "servico": "tipo específico do serviço em MAIÚSCULAS",
   "year_month": "YYYY-MM",
   "confianca": número de 0 a 100
 }
 
 Regras:
 1. Se o usuário forneceu local, use-o (apenas padronize acentos e caixa se necessário).
-2. Se o usuário forneceu serviço, use-o (apenas padronize).
-3. Se serviço não foi fornecido, classifique baseado no texto OCR. Categorias sugeridas: ${SERVICE_CATEGORIES.join(', ')}.
+2. Para CATEGORIA, escolha uma destas: ${WORK_CATEGORIES.join(', ')}.
+3. Para SERVIÇO, escolha uma destas ou infira do texto: ${SERVICE_TYPES.join(', ')}.
 4. Se não conseguir inferir o local com segurança, use "LOCAL_NAO_INFORMADO".
-5. Para year_month, use a data detectada. Não invente mês.
-6. A confiança deve refletir quão certo você está da classificação.${liteModeNote}`;
+5. Se não conseguir inferir a categoria, use "CATEGORIA_NAO_INFORMADA".
+6. Se não conseguir inferir o serviço, use "SERVICO_NAO_INFORMADO".
+7. Para year_month, use a data detectada. Não invente mês.
+8. A confiança deve refletir quão certo você está da classificação.${liteModeNote}
+
+Exemplos de classificação:
+- "Pintura da fachada do prédio" → categoria: "ACABAMENTO EXTERNO", servico: "PINTURA EXTERNA"
+- "Troca de telhas" → categoria: "COBERTURA", servico: "MANUTENÇÃO CORRETIVA"
+- "Limpeza do terreno" → categoria: "LIMPEZA", servico: "EXECUÇÃO DE LIMPEZA"`;
 
     const userContent = `Classifique esta foto de obra:
 
@@ -100,7 +129,7 @@ Retorne apenas o JSON, sem explicações.`;
           { role: "user", content: userContent },
         ],
         temperature: 0.3,
-        max_tokens: 200,
+        max_tokens: 250,
       }),
     });
 
@@ -142,6 +171,11 @@ Retorne apenas o JSON, sem explicações.`;
     // Validação básica
     if (!parsed.local || !parsed.servico) {
       throw new Error("Resposta da IA incompleta");
+    }
+
+    // Garante que categoria existe
+    if (!parsed.categoria) {
+      parsed.categoria = 'CATEGORIA_NAO_INFORMADA';
     }
 
     // Usa year_month da IA apenas se não temos um detectado
