@@ -88,15 +88,19 @@ const Index = () => {
       try {
         // OCR
         if (settings.ocrEnabled) {
-          setProgressLabel(`OCR: ${photo.filename}`);
+          setProgressLabel(`OCR${settings.liteMode ? ' (Lite)' : ''}: ${photo.filename}`);
           setProgressSubLabel(`${processed + 1} de ${total}`);
 
           handleUpdatePhoto(photo.id, { ocrStatus: 'processing' });
 
           try {
-            const ocrResult = await processOCR(photo.file, (p) => {
-              setProgress((processed / total) * 100 + (p / total) * 0.5);
-            });
+            const ocrResult = await processOCR(
+              photo.file, 
+              (p) => {
+                setProgress((processed / total) * 100 + (p / total) * 0.5);
+              },
+              { liteMode: settings.liteMode }
+            );
 
             const { dateIso, yearMonth } = extractDateFromText(ocrResult.text);
             const coords = extractCoordinatesFromText(ocrResult.text);
@@ -149,6 +153,7 @@ const Index = () => {
                 longitude: updatedPhoto.longitude,
                 userLocal: updatedPhoto.local || settings.defaultLocal,
                 userServico: updatedPhoto.servico || settings.defaultServico,
+                liteMode: settings.liteMode,
               },
               settings
             );
