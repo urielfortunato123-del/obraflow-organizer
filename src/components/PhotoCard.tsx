@@ -38,9 +38,11 @@ interface PhotoCardProps {
 
 export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCardProps) {
   const [editingFrente, setEditingFrente] = useState(false);
+  const [editingDisciplina, setEditingDisciplina] = useState(false);
   const [editingServico, setEditingServico] = useState(false);
   const [editingOcr, setEditingOcr] = useState(false);
   const [frenteValue, setFrenteValue] = useState(photo.frente);
+  const [disciplinaValue, setDisciplinaValue] = useState(photo.disciplina);
   const [servicoValue, setServicoValue] = useState(photo.servico);
   const [ocrValue, setOcrValue] = useState(photo.ocrText);
   const [showLightbox, setShowLightbox] = useState(false);
@@ -81,6 +83,11 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
     setEditingServico(false);
   };
 
+  const handleSaveDisciplina = () => {
+    onUpdate(photo.id, { disciplina: disciplinaValue });
+    setEditingDisciplina(false);
+  };
+
   const handleSaveOcr = () => {
     onUpdate(photo.id, { ocrText: ocrValue });
     setEditingOcr(false);
@@ -94,6 +101,11 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
   const handleCancelServico = () => {
     setServicoValue(photo.servico);
     setEditingServico(false);
+  };
+
+  const handleCancelDisciplina = () => {
+    setDisciplinaValue(photo.disciplina);
+    setEditingDisciplina(false);
   };
 
   const handleCancelOcr = () => {
@@ -401,12 +413,51 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                 )}
               </div>
 
-              {/* Disciplina (read-only) */}
-              <div className="space-y-1 p-2 rounded-lg">
-                <label className="text-xs font-medium text-muted-foreground">Disciplina</label>
-                <p className="text-sm text-foreground font-medium truncate">
-                  {photo.disciplina || '-'}
-                </p>
+              {/* Disciplina */}
+              <div className={`space-y-1 p-2 rounded-lg transition-colors ${
+                photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina 
+                  ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
+                  : ''
+              }`}>
+                <label className={`text-xs font-medium ${
+                  photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina 
+                    ? 'text-warning' 
+                    : 'text-muted-foreground'
+                }`}>
+                  Disciplina {(photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina) && '⚠️'}
+                </label>
+                {editingDisciplina ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={disciplinaValue}
+                      onChange={(e) => setDisciplinaValue(e.target.value)}
+                      className="h-8 text-sm"
+                      autoFocus
+                    />
+                    <button onClick={handleSaveDisciplina} className="p-1 text-success hover:bg-success/10 rounded">
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button onClick={handleCancelDisciplina} className="p-1 text-destructive hover:bg-destructive/10 rounded">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer group flex-1 min-w-0"
+                      onClick={() => setEditingDisciplina(true)}
+                    >
+                      <span className={`text-sm truncate font-semibold ${
+                        photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina 
+                          ? 'text-warning' 
+                          : 'text-foreground'
+                      }`}>
+                        {photo.disciplina || 'Clique para definir'}
+                      </span>
+                      <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Serviço */}
