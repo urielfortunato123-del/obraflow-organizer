@@ -7,6 +7,7 @@ import { ProgressBar } from '@/components/ProgressBar';
 import { ActionButtons } from '@/components/ActionButtons';
 import { FolderTreeView } from '@/components/FolderTreeView';
 import { BatchEditPanel } from '@/components/BatchEditPanel';
+import { QuickClassifyPanel } from '@/components/QuickClassifyPanel';
 import { ExportPreview } from '@/components/ExportPreview';
 import type { PhotoData, AppSettings } from '@/types/photo';
 import { DEFAULT_SETTINGS } from '@/types/photo';
@@ -374,6 +375,15 @@ const Index = () => {
         {/* Estrutura de pastas */}
         {photos.length > 0 && (
           <FolderTreeView files={photos.map(p => p.file)} />
+        )}
+
+        {/* Classificação Rápida - TURBO MODE */}
+        {photos.length > 0 && (
+          <QuickClassifyPanel
+            photos={photos}
+            onUpdatePhoto={handleUpdatePhoto}
+            onBatchUpdate={handleBatchUpdate}
+          />
         )}
 
         {/* Edição em lote */}
