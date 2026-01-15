@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { 
-  Rocket, ChevronDown, ChevronUp, Play, Pause, AlertCircle,
-  CheckCircle2, Loader2, Zap, FolderOpen, Copy
+  Rocket, ChevronDown, ChevronUp, AlertCircle,
+  CheckCircle2, Loader2, Zap, FolderOpen, Copy, Repeat, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -22,6 +22,14 @@ interface TurboProcessPanelProps {
 
 const BATCH_SIZE = 50; // Fotos por lote para a IA
 
+// Armazena última classificação usada por categoria
+interface LastClassification {
+  frente: string;
+  disciplina: string;
+  servico: string;
+  count: number;
+}
+
 export function TurboProcessPanel({ photos, onBatchUpdate }: TurboProcessPanelProps) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(true);
@@ -32,7 +40,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate }: TurboProcessPanelPr
   const [processedCount, setProcessedCount] = useState(0);
   const [errorCount, setErrorCount] = useState(0);
 
-  // Estatísticas
+  // Estatísticas e agrupamentos
   const stats = useMemo(() => {
     const unclassified = photos.filter(
       p => !p.frente || 
@@ -52,12 +60,40 @@ export function TurboProcessPanel({ photos, onBatchUpdate }: TurboProcessPanelPr
       folders.set(folder, (folders.get(folder) || 0) + 1);
     });
 
+    // Agrupa classificações usadas (para "última classificação")
+    const classificationCounts = new Map<string, LastClassification>();
+    photos.forEach(p => {
+      if (p.frente && p.disciplina && p.servico &&
+          p.frente !== 'FRENTE_NAO_INFORMADA' &&
+          p.disciplina !== 'DISCIPLINA_NAO_INFORMADA' &&
+          p.servico !== 'SERVICO_NAO_IDENTIFICADO') {
+        const key = `${p.frente}|${p.disciplina}|${p.servico}`;
+        const current = classificationCounts.get(key);
+        if (current) {
+          current.count++;
+        } else {
+          classificationCounts.set(key, {
+            frente: p.frente,
+            disciplina: p.disciplina,
+            servico: p.servico,
+            count: 1,
+          });
+        }
+      }
+    });
+
+    // Ordena por contagem (mais usadas primeiro)
+    const topClassifications = Array.from(classificationCounts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     return {
       total: photos.length,
       classified,
       unclassified: unclassified.length,
       folders: folders.size,
       unclassifiedPhotos: unclassified,
+      topClassifications,
     };
   }, [photos]);
 
@@ -205,6 +241,88 @@ export function TurboProcessPanel({ photos, onBatchUpdate }: TurboProcessPanelPr
     }
   }, [photos, onBatchUpdate, toast]);
 
+  // Aplica classificação em todas as fotos não classificadas que tenham características similares
+  const applyClassificationToSimilar = useCallback(async (classification: LastClassification) => {
+    // Encontra fotos não classificadas que podem receber esta classificação
+    // Baseado em: mesmo nome de pasta contendo palavras-chave, mesmo texto OCR similar
+    
+    const unclassifiedIds: string[] = [];
+    
+    for (const photo of stats.unclassifiedPhotos) {
+      // Verifica se a foto tem características que combinam com a classificação
+      const folderLower = (photo.folderPath || '').toLowerCase();
+      const filenameLower = (photo.filename || '').toLowerCase();
+      const ocrLower = (photo.ocrText || '').toLowerCase();
+      
+      const frenteLower = classification.frente.toLowerCase().replace(/_/g, ' ');
+      const disciplinaLower = classification.disciplina.toLowerCase().replace(/_/g, ' ');
+      const servicoLower = classification.servico.toLowerCase().replace(/_/g, ' ');
+      
+      // Verifica se alguma palavra-chave da classificação aparece no contexto da foto
+      const keywords = [
+        ...frenteLower.split(' '),
+        ...disciplinaLower.split(' '),
+        ...servicoLower.split(' '),
+      ].filter(k => k.length > 3); // Ignora palavras muito curtas
+      
+      const hasMatch = keywords.some(keyword => 
+        folderLower.includes(keyword) || 
+        filenameLower.includes(keyword) ||
+        ocrLower.includes(keyword)
+      );
+      
+      if (hasMatch) {
+        unclassifiedIds.push(photo.id);
+      }
+    }
+
+    if (unclassifiedIds.length === 0) {
+      toast({
+        title: 'Nenhuma foto compatível encontrada',
+        description: 'Não há fotos não classificadas com características similares.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    onBatchUpdate(unclassifiedIds, {
+      frente: classification.frente,
+      disciplina: classification.disciplina,
+      servico: classification.servico,
+      status: 'OK',
+    });
+
+    toast({
+      title: '✨ Classificação aplicada!',
+      description: `${unclassifiedIds.length} fotos similares receberam: ${classification.disciplina} / ${classification.servico}`,
+    });
+  }, [stats.unclassifiedPhotos, onBatchUpdate, toast]);
+
+  // Aplica classificação em TODAS as fotos não classificadas (sem filtro)
+  const applyToAllUnclassified = useCallback((classification: LastClassification) => {
+    const unclassifiedIds = stats.unclassifiedPhotos.map(p => p.id);
+
+    if (unclassifiedIds.length === 0) {
+      toast({
+        title: 'Nenhuma foto pendente',
+        description: 'Todas as fotos já estão classificadas!',
+      });
+      return;
+    }
+
+    onBatchUpdate(unclassifiedIds, {
+      frente: classification.frente,
+      disciplina: classification.disciplina,
+      servico: classification.servico,
+      status: 'OK',
+    });
+
+    toast({
+      title: '🚀 Classificação aplicada em massa!',
+      description: `${unclassifiedIds.length} fotos atualizadas com: ${classification.frente} / ${classification.disciplina} / ${classification.servico}`,
+    });
+  }, [stats.unclassifiedPhotos, onBatchUpdate, toast]);
+
   // Lista de pastas com fotos não classificadas
   const foldersWithUnclassified = useMemo(() => {
     const folders = new Map<string, { total: number; unclassified: number; hasClassified: boolean }>();
@@ -325,6 +443,64 @@ export function TurboProcessPanel({ photos, onBatchUpdate }: TurboProcessPanelPr
               </div>
             )}
 
+            {/* 🔥 APLICAR ÚLTIMA CLASSIFICAÇÃO */}
+            {stats.topClassifications.length > 0 && stats.unclassified > 0 && (
+              <div className="space-y-2 p-3 bg-gradient-to-r from-accent/10 to-primary/10 rounded-lg border border-accent/30">
+                <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  Aplicar classificação em massa
+                  <span className="text-xs text-accent bg-accent/20 px-2 py-0.5 rounded-full">
+                    RÁPIDO
+                  </span>
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Clique para aplicar em fotos similares (por palavras-chave) ou em TODAS de uma vez:
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {stats.topClassifications.map((c, idx) => (
+                    <div
+                      key={`${c.frente}-${c.disciplina}-${c.servico}`}
+                      className="bg-background rounded-lg p-2 border border-border"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="text-xs text-muted-foreground">
+                            {idx === 0 && '⭐ Mais usada • '}{c.count} foto(s)
+                          </div>
+                          <div className="text-sm font-medium truncate">
+                            <span className="text-blue-400">{c.frente}</span>
+                            <span className="text-muted-foreground mx-1">/</span>
+                            <span className="text-green-400">{c.disciplina}</span>
+                            <span className="text-muted-foreground mx-1">/</span>
+                            <span className="text-orange-400">{c.servico}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => applyClassificationToSimilar(c)}
+                          className="flex-1 h-8 text-xs"
+                        >
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          Aplicar em similares
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => applyToAllUnclassified(c)}
+                          className="flex-1 h-8 text-xs bg-accent hover:bg-accent/90"
+                        >
+                          <Repeat className="w-3 h-3 mr-1" />
+                          Aplicar em TODAS ({stats.unclassified})
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Propagação por pasta */}
             {foldersWithUnclassified.length > 0 && (
               <div className="space-y-2">
@@ -370,9 +546,10 @@ export function TurboProcessPanel({ photos, onBatchUpdate }: TurboProcessPanelPr
 
             {/* Dica */}
             <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
-              💡 <strong>Dica:</strong> O modo TURBO analisa o nome das pastas e arquivos para classificar automaticamente. 
-              Fotos na mesma pasta recebem a mesma classificação. 
-              Você pode também clicar em uma pasta para propagar a classificação de uma foto já classificada para todas as outras.
+              💡 <strong>Dicas:</strong><br/>
+              • <strong>"Aplicar em similares"</strong> = aplica só em fotos que têm palavras-chave parecidas (pasta, nome, OCR)<br/>
+              • <strong>"Aplicar em TODAS"</strong> = aplica em TODAS as fotos pendentes de uma vez<br/>
+              • <strong>Pastas</strong> = propaga classificação de uma foto para todas da mesma pasta
             </div>
           </div>
         </CollapsibleContent>
