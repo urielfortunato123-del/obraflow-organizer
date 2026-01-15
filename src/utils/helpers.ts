@@ -179,6 +179,29 @@ export function truncateText(text: string, maxLength: number = 100): string {
 }
 
 /**
+ * Extrai preview do texto OCR
+ * Remove linhas vazias e formata para exibição
+ */
+export function getOCRPreview(text: string | undefined, maxLines: number = 3): string {
+  if (!text || text.trim() === '') return '';
+  
+  const lines = text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+  
+  if (lines.length === 0) return '';
+  
+  const preview = lines.slice(0, maxLines).join(' • ');
+  
+  if (lines.length > maxLines) {
+    return preview + ` (+${lines.length - maxLines} linhas)`;
+  }
+  
+  return preview;
+}
+
+/**
  * Verifica se está online
  */
 export function isOnline(): boolean {

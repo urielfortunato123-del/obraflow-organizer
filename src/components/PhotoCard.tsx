@@ -24,8 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { PhotoLightbox } from '@/components/PhotoLightbox';
 import type { PhotoData } from '@/types/photo';
-import { formatDate } from '@/utils/helpers';
-import { getOCRPreview } from '@/utils/ocr';
+import { formatDate, getOCRPreview } from '@/utils/helpers';
 
 interface PhotoCardProps {
   photo: PhotoData;
@@ -197,19 +196,32 @@ export function PhotoCard({ photo, onUpdate, onDelete }: PhotoCardProps) {
                   </button>
                 </div>
               </div>
-            ) : photo.ocrText ? (
+            ) : (
               <div 
-                className="flex items-start gap-2 text-sm cursor-pointer group"
+                className="p-3 bg-muted/50 rounded-lg border border-border/50 cursor-pointer group hover:bg-muted/80 transition-colors"
                 onClick={() => setEditingOcr(true)}
                 title="Clique para editar"
               >
-                <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                <p className="text-muted-foreground text-xs leading-relaxed line-clamp-2 group-hover:text-foreground transition-colors">
-                  {getOCRPreview(photo.ocrText, 2) || 'Sem texto detectado'}
-                </p>
-                <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                <div className="flex items-start gap-2">
+                  <FileText className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-muted-foreground">Texto OCR</span>
+                      <Edit2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    {photo.ocrText ? (
+                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap line-clamp-4">
+                        {getOCRPreview(photo.ocrText, 4)}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        Nenhum texto extraído - clique para adicionar
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
-            ) : null}
+            )}
 
             {/* Data e GPS */}
             <div className="flex flex-wrap gap-4 text-sm">
