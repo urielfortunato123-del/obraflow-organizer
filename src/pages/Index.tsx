@@ -408,6 +408,10 @@ const Index = () => {
                   photo={photo}
                   onUpdate={handleUpdatePhoto}
                   onDelete={handleDeletePhoto}
+                  onApplyToAll={(field, value) => {
+                    const allIds = photos.map(p => p.id);
+                    handleBatchUpdate(allIds, { [field]: value });
+                  }}
                 />
               ))}
             </div>
