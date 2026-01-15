@@ -25,10 +25,7 @@ export interface PhotoData {
 }
 
 export interface AppSettings {
-  apiKey: string; // API IA
   ocrApiKey: string; // API OCR.space
-  endpoint: string;
-  model: string;
   ocrEnabled: boolean;
   aiEnabled: boolean;
   liteMode: boolean; // OCR rápido + IA compensa
@@ -44,23 +41,13 @@ export interface AIResponse {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  apiKey: '',
   ocrApiKey: '',
-  endpoint: 'https://api.openai.com/v1/chat/completions',
-  model: 'gpt-4o-mini',
   ocrEnabled: true,
   aiEnabled: true,
   liteMode: true, // Modo econômico ativo por padrão
   defaultLocal: '',
   defaultServico: '',
 };
-
-export const AI_MODELS = [
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-];
 
 export const SERVICE_CATEGORIES = [
   'Execução de limpeza',

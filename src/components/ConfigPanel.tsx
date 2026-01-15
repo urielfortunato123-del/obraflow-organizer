@@ -1,18 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Settings, Save, Eye, EyeOff, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, Save, Eye, EyeOff, Wifi, WifiOff, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { AppSettings } from '@/types/photo';
-import { AI_MODELS, DEFAULT_SETTINGS } from '@/types/photo';
 import { isOnline } from '@/utils/helpers';
 
 interface ConfigPanelProps {
@@ -39,7 +31,7 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
     };
   }, []);
 
-  const handleSaveApiKey = () => {
+  const handleSaveSettings = () => {
     localStorage.setItem('obradash_settings', JSON.stringify(settings));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -68,7 +60,7 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-foreground">Configurações</h2>
-            <p className="text-sm text-muted-foreground">API, OCR e IA</p>
+            <p className="text-sm text-muted-foreground">OCR e IA</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -179,44 +171,14 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
                 <Label htmlFor="ocrApiKey" className="text-sm font-medium">
                   Chave da API OCR
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="ocrApiKey"
-                    type={showApiKey ? 'text' : 'password'}
-                    placeholder="K1234567890..."
-                    value={settings.ocrApiKey}
-                    onChange={(e) => updateSetting('ocrApiKey', e.target.value)}
-                    className="input-industrial pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Configurações de IA */}
-          {settings.aiEnabled && (
-            <div className="space-y-4 p-4 rounded-lg bg-muted/50 border border-border">
-              <h3 className="text-sm font-semibold text-foreground">Configuração da IA</h3>
-              
-              <div className="space-y-2">
-                <Label htmlFor="apiKey" className="text-sm font-medium">
-                  Chave da API
-                </Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
-                      id="apiKey"
+                      id="ocrApiKey"
                       type={showApiKey ? 'text' : 'password'}
-                      placeholder="sk-..."
-                      value={settings.apiKey}
-                      onChange={(e) => updateSetting('apiKey', e.target.value)}
+                      placeholder="K1234567890..."
+                      value={settings.ocrApiKey}
+                      onChange={(e) => updateSetting('ocrApiKey', e.target.value)}
                       className="input-industrial pr-10"
                     />
                     <button
@@ -228,7 +190,7 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
                     </button>
                   </div>
                   <Button 
-                    onClick={handleSaveApiKey}
+                    onClick={handleSaveSettings}
                     className="btn-industrial flex items-center gap-2"
                   >
                     <Save className="w-4 h-4" />
@@ -236,41 +198,18 @@ export function ConfigPanel({ settings, onSettingsChange }: ConfigPanelProps) {
                   </Button>
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="model" className="text-sm font-medium">
-                    Modelo
-                  </Label>
-                  <Select
-                    value={settings.model}
-                    onValueChange={(value) => updateSetting('model', value)}
-                  >
-                    <SelectTrigger className="input-industrial">
-                      <SelectValue placeholder="Selecione o modelo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AI_MODELS.map((model) => (
-                        <SelectItem key={model.value} value={model.value}>
-                          {model.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="endpoint" className="text-sm font-medium">
-                    Endpoint
-                  </Label>
-                  <Input
-                    id="endpoint"
-                    placeholder="https://api.openai.com/v1/chat/completions"
-                    value={settings.endpoint}
-                    onChange={(e) => updateSetting('endpoint', e.target.value)}
-                    className="input-industrial"
-                  />
-                </div>
+          {/* Info da IA integrada */}
+          {settings.aiEnabled && (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">IA Integrada (Gemini Lite)</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Classificação automática usando Google Gemini. Não precisa de API key — já está configurado!
+                </p>
               </div>
             </div>
           )}
