@@ -386,6 +386,7 @@ const Index = () => {
           <TurboProcessPanel
             photos={photos}
             onBatchUpdate={handleBatchUpdate}
+            onUpdatePhoto={handleUpdatePhoto}
             onScrollToPhoto={(photoId) => {
               const element = document.getElementById(`photo-${photoId}`);
               if (element) {
