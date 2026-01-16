@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { 
   Rocket, ChevronDown, ChevronUp, AlertCircle,
   CheckCircle2, Loader2, Zap, FolderOpen, Copy, Repeat, Sparkles,
@@ -15,7 +15,8 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import type { PhotoData } from '@/types/photo';
 import { useToast } from '@/hooks/use-toast';
-import { classifyWithAliases } from '@/utils/helpers';
+import { classifyPhoto, needsReview, propagateByFolder, determineStatus } from '@/utils/classification';
+import { extractDateFromFile } from '@/utils/exportPath';
 
 interface TurboProcessPanelProps {
   photos: PhotoData[];
@@ -139,7 +140,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     })).filter(ur => ur.photo);
   }, [unrecognizedPhotos, photos]);
 
-  // Processa em lotes - PRIMEIRO tenta match local, depois IA para o resto
+  // Processa em lotes - NOVO SISTEMA: Classificação local inteligente + IA como fallback
   const processWithAI = useCallback(async () => {
     if (stats.unclassifiedPhotos.length === 0) {
       toast({
@@ -164,63 +165,178 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     let errors = 0;
     
     // ============================================
-    // FASE 1: Match local direto nas listas
+    // FASE 1: Classificação local inteligente
+    // Hierarquia: folderPath > filename > OCR
     // ============================================
-    console.log('[Turbo] FASE 1: Tentando match local em', photosToProcess.length, 'fotos...');
+    console.log('[Turbo] FASE 1: Classificação local em', photosToProcess.length, 'fotos...');
     
     const photosNeedingAI: PhotoData[] = [];
     
     for (const photo of photosToProcess) {
-      const localResult = classifyWithAliases({
+      // Usa o novo sistema de classificação
+      const classification = classifyPhoto({
+        file: photo.file,
         folderPath: photo.folderPath,
         filename: photo.filename,
         ocrText: photo.ocrText,
+        dateIso: photo.dateIso,
+        yearMonth: photo.yearMonth,
       });
-      if (localResult.confidence === 'high') {
-        // Match completo! Não precisa de IA
+
+      // Garante que a data sempre vem do arquivo se não tiver
+      let finalDateIso = classification.dateIso || photo.dateIso;
+      let finalYearMonth = classification.yearMonth || photo.yearMonth;
+      let finalDay = classification.day || photo.day;
+      
+      if (!finalDateIso && photo.file) {
+        const fileDate = extractDateFromFile(photo.file);
+        finalDateIso = fileDate.dateIso;
+        finalYearMonth = fileDate.yearMonth;
+        finalDay = fileDate.day;
+      }
+
+      // Determina status baseado na nova regra objetiva
+      const finalStatus = determineStatus({
+        frente: classification.frente,
+        disciplina: classification.disciplina,
+        servico: classification.servico,
+        dateIso: finalDateIso,
+      });
+
+      if (classification.status === 'AUTO_OK' || finalStatus === 'OK') {
+        // ✅ Classificação completa - não precisa de IA
         onBatchUpdate([photo.id], {
-          frente: localResult.frente || 'FRENTE_NAO_INFORMADA',
-          disciplina: localResult.disciplina || 'DISCIPLINA_NAO_INFORMADA',
-          servico: localResult.servico || 'SERVICO_NAO_IDENTIFICADO',
+          frente: classification.frente,
+          disciplina: classification.disciplina,
+          servico: classification.servico,
+          dateIso: finalDateIso,
+          yearMonth: finalYearMonth,
+          day: finalDay,
           status: 'OK',
-          aiStatus: 'skipped', // Não precisou de IA
+          aiStatus: 'skipped',
         });
         localMatchCount++;
         successCount++;
-        console.log(`[Turbo] ✅ Match local: ${photo.filename} → ${localResult.disciplina} / ${localResult.servico}`);
-      } else if (localResult.confidence === 'medium') {
-        // Match parcial (2 de 3 campos) - ainda tenta usar
+        console.log(`[Turbo] ✅ AUTO_OK: ${photo.filename} → ${classification.frente} / ${classification.disciplina} / ${classification.servico}`);
+      } else if (classification.status === 'REVISAR') {
+        // ⚠️ Falta 1 campo - classifica mas marca para revisão
         onBatchUpdate([photo.id], {
-          frente: localResult.frente || photo.frente || 'FRENTE_NAO_INFORMADA',
-          disciplina: localResult.disciplina || photo.disciplina || 'DISCIPLINA_NAO_INFORMADA',
-          servico: localResult.servico || photo.servico || 'SERVICO_NAO_IDENTIFICADO',
-          status: 'Pendente',
-          aiStatus: 'success', // Parcialmente classificado
+          frente: classification.frente,
+          disciplina: classification.disciplina,
+          servico: classification.servico,
+          dateIso: finalDateIso,
+          yearMonth: finalYearMonth,
+          day: finalDay,
+          status: finalStatus,
+          aiStatus: 'success',
         });
         
-        // Adiciona à lista de verificação com confiança média
-        newUnrecognized.push({
-          photoId: photo.id,
-          confidence: 'medium',
-          frente: localResult.frente,
-          disciplina: localResult.disciplina,
-          servico: localResult.servico,
-          reason: 'Match parcial - verifique os campos faltantes',
-        });
+        // Só adiciona à lista de verificação se realmente precisar
+        if (needsReview({ frente: classification.frente, disciplina: classification.disciplina, servico: classification.servico })) {
+          newUnrecognized.push({
+            photoId: photo.id,
+            confidence: 'medium',
+            frente: classification.frente,
+            disciplina: classification.disciplina,
+            servico: classification.servico,
+            reason: 'Verificar classificação',
+          });
+        }
         
         localMatchCount++;
         successCount++;
+        console.log(`[Turbo] ⚠️ REVISAR: ${photo.filename} → ${classification.disciplina} / ${classification.servico}`);
       } else {
-        // Não encontrou match suficiente, precisa de IA
-        photosNeedingAI.push(photo);
+        // ❌ Precisa de IA
+        // Mas primeiro, aplica o que conseguiu extrair
+        if (classification.frente !== 'FRENTE_NAO_INFORMADA' || 
+            classification.disciplina !== 'DISCIPLINA_NAO_INFORMADA' ||
+            classification.servico !== 'SERVICO_NAO_IDENTIFICADO') {
+          onBatchUpdate([photo.id], {
+            frente: classification.frente,
+            disciplina: classification.disciplina,
+            servico: classification.servico,
+            dateIso: finalDateIso,
+            yearMonth: finalYearMonth,
+            day: finalDay,
+          });
+        }
+        photosNeedingAI.push({
+          ...photo,
+          frente: classification.frente,
+          disciplina: classification.disciplina,
+          servico: classification.servico,
+          dateIso: finalDateIso,
+          yearMonth: finalYearMonth,
+          day: finalDay,
+        });
       }
     }
     
     console.log(`[Turbo] FASE 1 concluída: ${localMatchCount} fotos classificadas localmente, ${photosNeedingAI.length} precisam de IA`);
     
+    // ============================================
+    // FASE 1.5: Propagação por pasta
+    // Se uma foto da pasta foi classificada, propaga
+    // ============================================
+    if (localMatchCount > 0 && photosNeedingAI.length > 0) {
+      console.log('[Turbo] FASE 1.5: Propagando classificação por pasta...');
+      
+      // Agrupa fotos já classificadas por pasta
+      const classifiedByFolder = new Map<string, { frente: string; disciplina: string; servico: string }>();
+      
+      for (const photo of photosToProcess) {
+        if (!photo.folderPath) continue;
+        
+        const currentPhoto = photos.find(p => p.id === photo.id);
+        if (!currentPhoto) continue;
+        
+        const hasClass = currentPhoto.disciplina && 
+          currentPhoto.disciplina !== 'DISCIPLINA_NAO_INFORMADA' &&
+          currentPhoto.disciplina !== 'DISCIPLINA_NAO_IDENTIFICADA' &&
+          currentPhoto.servico &&
+          currentPhoto.servico !== 'SERVICO_NAO_IDENTIFICADO' &&
+          currentPhoto.servico !== 'SERVICO_NAO_INFORMADO';
+        
+        if (hasClass && !classifiedByFolder.has(photo.folderPath)) {
+          classifiedByFolder.set(photo.folderPath, {
+            frente: currentPhoto.frente,
+            disciplina: currentPhoto.disciplina,
+            servico: currentPhoto.servico,
+          });
+        }
+      }
+      
+      // Propaga para fotos que precisam de IA
+      const stillNeedAI: PhotoData[] = [];
+      for (const photo of photosNeedingAI) {
+        const base = classifiedByFolder.get(photo.folderPath || '');
+        
+        if (base) {
+          // Propaga classificação da pasta
+          onBatchUpdate([photo.id], {
+            frente: base.frente,
+            disciplina: base.disciplina,
+            servico: base.servico,
+            status: 'OK',
+            aiStatus: 'skipped',
+          });
+          localMatchCount++;
+          successCount++;
+          console.log(`[Turbo] 📂 Propagado: ${photo.filename} ← pasta ${photo.folderPath}`);
+        } else {
+          stillNeedAI.push(photo);
+        }
+      }
+      
+      photosNeedingAI.length = 0;
+      photosNeedingAI.push(...stillNeedAI);
+      console.log(`[Turbo] FASE 1.5 concluída: ${stillNeedAI.length} ainda precisam de IA`);
+    }
+    
     // Atualiza progresso após fase 1
     const phase1Progress = photosToProcess.length > 0 
-      ? (localMatchCount / photosToProcess.length) * 30 // Fase 1 = 30% do progresso
+      ? (localMatchCount / photosToProcess.length) * 40 // Fase 1 = 40% do progresso
       : 0;
     setProgress(phase1Progress);
     setProcessedCount(localMatchCount);
@@ -242,7 +358,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
         const batch = photosNeedingAI.slice(start, end);
 
         try {
-          // Prepara dados para a IA
+          // Prepara dados para a IA (inclui classificação parcial para contexto)
           const batchData = batch.map(p => ({
             id: p.id,
             filename: p.filename,
@@ -250,6 +366,10 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
             ocrText: p.ocrText?.substring(0, 300),
             dateIso: p.dateIso,
             yearMonth: p.yearMonth,
+            // Inclui classificação parcial para a IA complementar
+            partialFrente: p.frente !== 'FRENTE_NAO_INFORMADA' ? p.frente : undefined,
+            partialDisciplina: p.disciplina !== 'DISCIPLINA_NAO_INFORMADA' ? p.disciplina : undefined,
+            partialServico: p.servico !== 'SERVICO_NAO_IDENTIFICADO' ? p.servico : undefined,
           }));
 
           console.log(`[Turbo] Processando lote IA ${i + 1}/${batches} (${batch.length} fotos)`);
@@ -295,48 +415,47 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
             continue;
           }
 
-          // Aplica resultados
+          // Aplica resultados, respeitando a hierarquia (pasta > IA)
           const results = data.results || [];
           for (const result of results) {
-            let confidence: 'high' | 'medium' | 'low' | 'unrecognized' = 'high';
-            let missingFields: string[] = [];
+            const originalPhoto = batch.find(p => p.id === result.id);
             
-            if (!result.frente || result.frente === 'FRENTE_NAO_INFORMADA') {
-              missingFields.push('Frente');
-            }
-            if (!result.disciplina || result.disciplina === 'DISCIPLINA_NAO_INFORMADA') {
-              missingFields.push('Disciplina');
-            }
-            if (!result.servico || result.servico === 'SERVICO_NAO_IDENTIFICADO') {
-              missingFields.push('Serviço');
-            }
-            
-            if (missingFields.length >= 3) {
-              confidence = 'unrecognized';
-            } else if (missingFields.length === 2) {
-              confidence = 'low';
-            } else if (missingFields.length === 1) {
-              confidence = 'medium';
-            }
+            // Se a pasta já tinha classificação, mantém (pasta > IA)
+            const finalFrente = (originalPhoto?.frente && originalPhoto.frente !== 'FRENTE_NAO_INFORMADA')
+              ? originalPhoto.frente
+              : (result.frente || 'FRENTE_NAO_INFORMADA');
+            const finalDisciplina = (originalPhoto?.disciplina && originalPhoto.disciplina !== 'DISCIPLINA_NAO_INFORMADA')
+              ? originalPhoto.disciplina
+              : (result.disciplina || 'DISCIPLINA_NAO_INFORMADA');
+            const finalServico = (originalPhoto?.servico && originalPhoto.servico !== 'SERVICO_NAO_IDENTIFICADO')
+              ? originalPhoto.servico
+              : (result.servico || 'SERVICO_NAO_IDENTIFICADO');
 
-            onBatchUpdate([result.id], {
-              frente: result.frente || 'FRENTE_NAO_INFORMADA',
-              disciplina: result.disciplina || 'DISCIPLINA_NAO_INFORMADA',
-              servico: result.servico || 'SERVICO_NAO_IDENTIFICADO',
-              status: confidence === 'high' ? 'OK' : 'Pendente',
-              aiStatus: confidence === 'unrecognized' ? 'error' : 'success',
+            // Determina status final
+            const finalStatus = determineStatus({
+              frente: finalFrente,
+              disciplina: finalDisciplina,
+              servico: finalServico,
+              dateIso: originalPhoto?.dateIso,
             });
 
-            if (confidence !== 'high') {
+            onBatchUpdate([result.id], {
+              frente: finalFrente,
+              disciplina: finalDisciplina,
+              servico: finalServico,
+              status: finalStatus,
+              aiStatus: 'success',
+            });
+
+            // Só marca para verificação se REALMENTE precisar
+            if (needsReview({ frente: finalFrente, disciplina: finalDisciplina, servico: finalServico })) {
               newUnrecognized.push({
                 photoId: result.id,
-                confidence,
-                frente: result.frente,
-                disciplina: result.disciplina,
-                servico: result.servico,
-                reason: missingFields.length > 0 
-                  ? `Campos não identificados: ${missingFields.join(', ')}`
-                  : 'Baixa confiança na classificação',
+                confidence: finalStatus === 'OK' ? 'medium' : 'low',
+                frente: finalFrente,
+                disciplina: finalDisciplina,
+                servico: finalServico,
+                reason: 'Verificar classificação da IA',
               });
             }
             
@@ -368,11 +487,11 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
           });
         }
 
-        setProcessedCount(successCount);
+        setProcessedCount(localMatchCount + aiProcessCount);
         setErrorCount(errors);
         
-        // Progresso: 30% fase 1 + 70% fase 2
-        const phase2Progress = 30 + (((i + 1) / batches) * 70);
+        // Progresso: 40% fase 1 + 60% fase 2
+        const phase2Progress = 40 + (((i + 1) / batches) * 60);
         setProgress(phase2Progress);
 
         if (i < batches - 1) {
@@ -392,13 +511,14 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     // Mensagem final com estatísticas
     const aiSaved = localMatchCount > 0 ? ` 🚀 ${localMatchCount} classificadas localmente (sem IA)!` : '';
     const aiUsed = aiProcessCount > 0 ? ` 🤖 ${aiProcessCount} processadas por IA.` : '';
+    const okCount = photos.filter(p => p.status === 'OK').length + successCount;
     
     toast({
       title: 'Processamento TURBO concluído!',
-      description: `${successCount} fotos analisadas.${aiSaved}${aiUsed}${newUnrecognized.length > 0 ? ` ⚠️ ${newUnrecognized.length} precisam de verificação.` : ' ✅ Todas classificadas!'}`,
+      description: `✅ ${okCount} fotos prontas.${aiSaved}${aiUsed}${newUnrecognized.length > 0 ? ` ⚠️ ${newUnrecognized.length} para verificar.` : ''}`,
     });
 
-  }, [stats.unclassifiedPhotos, onBatchUpdate, toast]);
+  }, [stats.unclassifiedPhotos, photos, onBatchUpdate, toast]);
 
   // Propaga classificação de uma foto para todas da mesma pasta
   const propagateFromFolder = useCallback((folderPath: string) => {
