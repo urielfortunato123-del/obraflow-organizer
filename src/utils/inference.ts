@@ -294,6 +294,32 @@ export const SERVICE_TO_DISCIPLINA: Record<string, string> = {
 };
 
 /**
+ * Mapeamento de DISCIPLINA para SERVIÇO padrão
+ * Usado quando temos a disciplina mas não o serviço
+ */
+export const DISCIPLINA_TO_DEFAULT_SERVICO: Record<string, string> = {
+  'DRENAGEM': 'EXECUCAO_DE_DRENAGEM',
+  'TERRAPLANAGEM': 'MOVIMENTACAO_DE_TERRA',
+  'PAVIMENTACAO': 'EXECUCAO_DE_PAVIMENTO',
+  'SINALIZACAO': 'SINALIZACAO_VIARIA',
+  'ESTRUTURA': 'EXECUCAO_DE_ESTRUTURA',
+  'PAISAGISMO': 'SERVICOS_DE_PAISAGISMO',
+  'OBRAS_ARTE_ESPECIAIS': 'OBRA_DE_ARTE',
+  'INSTALACOES_ELETRICAS': 'INSTALACAO_ELETRICA',
+  'LIMPEZA': 'LIMPEZA_DE_TERRENO',
+  'MANUTENCAO': 'MANUTENCAO_GERAL',
+};
+
+/**
+ * Infere SERVIÇO padrão a partir da DISCIPLINA
+ */
+export function inferServicoFromDisciplina(disciplina?: string): string {
+  if (!disciplina) return '';
+  const normalized = norm(disciplina).replace(/\s+/g, '_');
+  return DISCIPLINA_TO_DEFAULT_SERVICO[normalized] || '';
+}
+
+/**
  * Infere DISCIPLINA a partir do SERVIÇO
  */
 export function inferDisciplinaFromServico(servico?: string): string {
@@ -392,9 +418,11 @@ export function applyFallbacks(photo: {
     disciplina = inferred || 'DISCIPLINA_NAO_INFORMADA';
   }
   
-  // Fallback para SERVIÇO - não tem como inferir automaticamente
+  // Fallback para SERVIÇO - infere da disciplina se possível
   if (!servico || servico === 'SERVICO_NAO_IDENTIFICADO' || servico.includes('NAO_IDENTIFICAD')) {
-    servico = 'SERVICO_NAO_IDENTIFICADO';
+    // Se temos disciplina, usa serviço padrão da disciplina
+    const inferredServico = inferServicoFromDisciplina(disciplina);
+    servico = inferredServico || 'SERVICO_NAO_IDENTIFICADO';
   }
   
   return { frente, disciplina, servico };

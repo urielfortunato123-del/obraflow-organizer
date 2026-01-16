@@ -22,6 +22,7 @@ import {
   inferDisciplinaFromPath, 
   inferFrenteFromPath, 
   inferDisciplinaFromServico,
+  inferServicoFromDisciplina,
   needsManualReview,
   applyFallbacks 
 } from '@/utils/inference';
