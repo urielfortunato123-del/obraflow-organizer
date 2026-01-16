@@ -6,13 +6,19 @@ export interface OCRResult {
   date?: string | null;
   local?: string | null;
   servico?: string | null;
-  disciplina?: string | null; // Novo: identificado visualmente
+  disciplina?: string | null;
+  engines?: {
+    google?: { success: boolean; confidence: number };
+    azure?: { success: boolean; confidence: number };
+    gemini?: { success: boolean; confidence: number };
+  };
 }
 
 export interface OCROptions {
   apiKey?: string;
   liteMode?: boolean;
-  useVision?: boolean; // Usar Gemini Vision ao invés de OCR.space
+  useVision?: boolean;
+  useMultiOCR?: boolean; // Usar múltiplos OCR engines em paralelo
 }
 
 const OCR_SPACE_API = 'https://api.ocr.space/parse/image';
@@ -93,8 +99,71 @@ async function resizeImageForOCR(file: File, maxWidth: number = 1024): Promise<F
 }
 
 /**
+ * Processa OCR usando MÚLTIPLOS engines em paralelo (Google Vision + Azure + Gemini)
+ * Mais preciso e robusto
+ */
+async function processMultiOCR(
+  imageFile: File,
+  onProgress?: (progress: number) => void
+): Promise<OCRResult> {
+  console.log(`[Multi-OCR] Iniciando processamento paralelo: ${imageFile.name}`);
+  onProgress?.(10);
+
+  try {
+    // Redimensiona se muito grande
+    let processFile = imageFile;
+    if (imageFile.size > 2 * 1024 * 1024) {
+      console.log(`[Multi-OCR] Redimensionando imagem grande: ${(imageFile.size / 1024 / 1024).toFixed(1)}MB`);
+      processFile = await resizeImageForOCR(imageFile, 1600);
+      console.log(`[Multi-OCR] Novo tamanho: ${(processFile.size / 1024 / 1024).toFixed(1)}MB`);
+    }
+
+    onProgress?.(30);
+
+    const base64Content = await fileToBase64Content(processFile);
+    const mimeType = processFile.type || 'image/jpeg';
+    
+    onProgress?.(50);
+
+    const { data, error } = await supabase.functions.invoke('ocr-multi', {
+      body: { imageBase64: base64Content, mimeType },
+    });
+
+    onProgress?.(90);
+
+    if (error) {
+      console.error('[Multi-OCR] Erro:', error);
+      throw new Error(error.message || 'Erro no Multi-OCR');
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    console.log(`[Multi-OCR] Concluído: ${imageFile.name}`);
+    console.log(`[Multi-OCR] Engines:`, data.engines);
+
+    onProgress?.(100);
+
+    return {
+      text: data.text || '',
+      confidence: data.confidence || 0,
+      date: data.date,
+      local: data.local,
+      servico: data.servico,
+      disciplina: data.disciplina,
+      engines: data.engines,
+    };
+
+  } catch (error) {
+    console.error(`[Multi-OCR] Erro ao processar ${imageFile.name}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Processa OCR usando Gemini Vision (Lovable AI)
- * Muito mais preciso para textos em fotos
+ * Fallback quando multi-OCR não está disponível
  */
 async function processOCRVision(
   imageFile: File,
@@ -104,7 +173,6 @@ async function processOCRVision(
   onProgress?.(10);
 
   try {
-    // Redimensiona se muito grande (limite de ~4MB para base64)
     let processFile = imageFile;
     if (imageFile.size > 2 * 1024 * 1024) {
       console.log(`[OCR Vision] Redimensionando imagem grande: ${(imageFile.size / 1024 / 1024).toFixed(1)}MB`);
@@ -114,18 +182,13 @@ async function processOCRVision(
 
     onProgress?.(30);
 
-    // Converte para base64
     const base64Content = await fileToBase64Content(processFile);
     const mimeType = processFile.type || 'image/jpeg';
     
     onProgress?.(50);
 
-    // Chama edge function
     const { data, error } = await supabase.functions.invoke('ocr-vision', {
-      body: {
-        imageBase64: base64Content,
-        mimeType,
-      },
+      body: { imageBase64: base64Content, mimeType },
     });
 
     onProgress?.(90);
@@ -140,8 +203,6 @@ async function processOCRVision(
     }
 
     console.log(`[OCR Vision] Concluído: ${imageFile.name}`);
-    console.log(`[OCR Vision] Texto: ${data.text?.substring(0, 200)}`);
-    console.log(`[OCR Vision] Local: ${data.local}, Serviço: ${data.servico}, Disciplina: ${data.disciplina}`);
 
     onProgress?.(100);
 
@@ -151,7 +212,7 @@ async function processOCRVision(
       date: data.date,
       local: data.local,
       servico: data.servico,
-      disciplina: data.disciplina, // Novo campo
+      disciplina: data.disciplina,
     };
 
   } catch (error) {
@@ -249,23 +310,35 @@ async function processOCRSpace(
 
 /**
  * Processa OCR de uma imagem
- * Por padrão usa Gemini Vision (mais preciso)
- * Se falhar ou se useVision=false, usa OCR.space como fallback
+ * Prioridade:
+ * 1. Multi-OCR (Google Vision + Azure + Gemini em paralelo) - mais robusto
+ * 2. Gemini Vision (fallback)
+ * 3. OCR.space (último fallback)
  */
 export async function processOCR(
   imageFile: File,
   options: OCROptions,
   onProgress?: (progress: number) => void
 ): Promise<OCRResult> {
-  const useVision = options.useVision !== false; // Padrão é true
+  const useMultiOCR = options.useMultiOCR !== false; // Padrão é true agora
+  const useVision = options.useVision !== false;
 
+  // Tenta Multi-OCR primeiro (mais robusto)
+  if (useMultiOCR) {
+    try {
+      return await processMultiOCR(imageFile, onProgress);
+    } catch (error) {
+      console.warn('[OCR] Multi-OCR falhou, tentando Gemini Vision...');
+    }
+  }
+
+  // Fallback para Gemini Vision
   if (useVision) {
     try {
       return await processOCRVision(imageFile, onProgress);
     } catch (error) {
-      console.warn('[OCR] Gemini Vision falhou, tentando OCR.space como fallback...');
+      console.warn('[OCR] Gemini Vision falhou, tentando OCR.space...');
       
-      // Se temos API key do OCR.space, tenta como fallback
       if (options.apiKey) {
         return await processOCRSpace(imageFile, options, onProgress);
       }
@@ -274,7 +347,7 @@ export async function processOCR(
     }
   }
 
-  // Usa OCR.space diretamente
+  // Último fallback: OCR.space
   return await processOCRSpace(imageFile, options, onProgress);
 }
 
