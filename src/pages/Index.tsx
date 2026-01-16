@@ -12,7 +12,7 @@ import { TurboProcessPanel } from '@/components/TurboProcessPanel';
 import { ExportPreview } from '@/components/ExportPreview';
 import type { PhotoData, AppSettings } from '@/types/photo';
 import { DEFAULT_SETTINGS } from '@/types/photo';
-import { generateId, extractDateFromText, extractCoordinatesFromText } from '@/utils/helpers';
+import { generateId, extractDateFromText, extractCoordinatesFromText, sortPhotosForView } from '@/utils/helpers';
 import { processOCR } from '@/utils/ocr';
 import { classifyWithAI, isAIAvailable } from '@/utils/ai';
 import { generateZip, generateCSV } from '@/utils/export';
@@ -359,6 +359,9 @@ const Index = () => {
 
   const processedCount = photos.filter(p => p.status === 'OK' || p.frente || p.servico).length;
 
+  // Ordena fotos para visualização: EMPRESA > FRENTE (P01..P25) > DISCIPLINA > SERVIÇO > DATA > NOME
+  const photosOrdered = useMemo(() => sortPhotosForView(photos), [photos]);
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -461,7 +464,7 @@ const Index = () => {
             </div>
 
             <div className="grid gap-4">
-              {photos.map((photo) => (
+              {photosOrdered.map((photo) => (
                 <div key={photo.id} id={`photo-${photo.id}`} className="transition-all duration-300">
                   <PhotoCard
                     photo={photo}
