@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { PhotoData } from '@/types/photo';
 import { normalizeName, formatTimestamp } from './helpers';
+import { buildSimpleExportPath, computeYearMonthDay } from './exportPath';
 
 /**
  * Formata ano/mês para nome de pasta
@@ -56,15 +57,24 @@ export async function generateZip(
   }
 
   // Adiciona cada foto na estrutura correta
-  // Estrutura: FRENTE / DISCIPLINA / SERVIÇO / MÊS / DIA / foto
   for (let i = 0; i < processedPhotos.length; i++) {
     const photo = processedPhotos[i];
+    
+    // Garante data do arquivo se não tiver
+    let finalYearMonth = photo.yearMonth;
+    let finalDateIso = photo.dateIso;
+    
+    if (!finalYearMonth || !finalDateIso) {
+      const { yearMonth, day } = computeYearMonthDay(photo.dateIso, photo.file?.lastModified);
+      finalYearMonth = yearMonth;
+      finalDateIso = photo.dateIso || `${yearMonth}-${day}`;
+    }
     
     const frenteFolder = normalizeName(photo.frente || 'FRENTE_NAO_INFORMADA');
     const disciplinaFolder = normalizeName(photo.disciplina || 'DISCIPLINA_NAO_INFORMADA');
     const servicoFolder = normalizeName(photo.servico || 'SERVICO_NAO_INFORMADO');
-    const mesFolder = formatYearMonthFolder(photo.yearMonth);
-    const diaFolder = formatDayFolder(photo.dateIso);
+    const mesFolder = formatYearMonthFolder(finalYearMonth);
+    const diaFolder = formatDayFolder(finalDateIso);
     
     const folderPath = `${frenteFolder}/${disciplinaFolder}/${servicoFolder}/${mesFolder}/${diaFolder}`;
     const filePath = `${folderPath}/${photo.filename}`;
