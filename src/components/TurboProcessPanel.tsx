@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import type { PhotoData } from '@/types/photo';
 import { useToast } from '@/hooks/use-toast';
-import { DISCIPLINAS, SERVICOS, FRENTES_DE_OBRA } from '@/data/constructionTerms';
+import { classifyWithAliases } from '@/utils/helpers';
 
 interface TurboProcessPanelProps {
   photos: PhotoData[];
@@ -24,112 +24,6 @@ interface TurboProcessPanelProps {
 }
 
 const BATCH_SIZE = 50; // Fotos por lote para a IA
-
-// Normaliza texto para comparação (uppercase, remove acentos, substitui _ por espaço)
-function normalizeText(text: string): string {
-  return text
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-    .replace(/_/g, ' ')
-    .replace(/[^A-Z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-// Tenta fazer match direto de uma string nas listas de termos
-function findDirectMatch(text: string, list: string[]): string | null {
-  const normalized = normalizeText(text);
-  const words = normalized.split(' ').filter(w => w.length > 2);
-  
-  for (const term of list) {
-    const normalizedTerm = normalizeText(term);
-    
-    // Match exato
-    if (normalized === normalizedTerm) {
-      return term;
-    }
-    
-    // Match se o texto contém o termo completo
-    if (normalized.includes(normalizedTerm) && normalizedTerm.length > 3) {
-      return term;
-    }
-    
-    // Match se o termo contém o texto (para termos curtos)
-    if (normalizedTerm.includes(normalized) && normalized.length > 3) {
-      return term;
-    }
-    
-    // Match por palavras (cada palavra do termo aparece no texto)
-    const termWords = normalizedTerm.split(' ').filter(w => w.length > 2);
-    if (termWords.length > 0 && termWords.every(tw => words.some(w => w.includes(tw) || tw.includes(w)))) {
-      return term;
-    }
-  }
-  
-  return null;
-}
-
-// Classifica foto localmente sem chamar IA
-interface LocalClassification {
-  frente?: string;
-  disciplina?: string;
-  servico?: string;
-  confidence: 'high' | 'medium' | 'low' | 'none';
-}
-
-function classifyLocally(photo: PhotoData): LocalClassification {
-  const sources = [
-    photo.folderPath || '',
-    photo.filename || '',
-    photo.ocrText || '',
-  ].join(' ');
-  
-  // Também testa cada parte separadamente para matches mais precisos
-  const folderParts = (photo.folderPath || '').split(/[\/\\]/).filter(Boolean);
-  
-  let frente: string | null = null;
-  let disciplina: string | null = null;
-  let servico: string | null = null;
-  
-  // Tenta match em cada parte da pasta primeiro (mais específico)
-  for (const part of folderParts) {
-    if (!frente) frente = findDirectMatch(part, FRENTES_DE_OBRA);
-    if (!disciplina) disciplina = findDirectMatch(part, DISCIPLINAS);
-    if (!servico) servico = findDirectMatch(part, SERVICOS);
-  }
-  
-  // Se não encontrou, tenta no texto completo
-  if (!frente) frente = findDirectMatch(sources, FRENTES_DE_OBRA);
-  if (!disciplina) disciplina = findDirectMatch(sources, DISCIPLINAS);
-  if (!servico) servico = findDirectMatch(sources, SERVICOS);
-  
-  // Também testa o nome do arquivo
-  if (!frente) frente = findDirectMatch(photo.filename || '', FRENTES_DE_OBRA);
-  if (!disciplina) disciplina = findDirectMatch(photo.filename || '', DISCIPLINAS);
-  if (!servico) servico = findDirectMatch(photo.filename || '', SERVICOS);
-  
-  // Calcula confiança baseado em quantos campos foram encontrados
-  const found = [frente, disciplina, servico].filter(Boolean).length;
-  let confidence: 'high' | 'medium' | 'low' | 'none';
-  
-  if (found === 3) {
-    confidence = 'high';
-  } else if (found === 2) {
-    confidence = 'medium';
-  } else if (found === 1) {
-    confidence = 'low';
-  } else {
-    confidence = 'none';
-  }
-  
-  return {
-    frente: frente || undefined,
-    disciplina: disciplina || undefined,
-    servico: servico || undefined,
-    confidence,
-  };
-}
 
 // Armazena última classificação usada por categoria
 interface LastClassification {
@@ -277,8 +171,11 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     const photosNeedingAI: PhotoData[] = [];
     
     for (const photo of photosToProcess) {
-      const localResult = classifyLocally(photo);
-      
+      const localResult = classifyWithAliases({
+        folderPath: photo.folderPath,
+        filename: photo.filename,
+        ocrText: photo.ocrText,
+      });
       if (localResult.confidence === 'high') {
         // Match completo! Não precisa de IA
         onBatchUpdate([photo.id], {
