@@ -162,7 +162,7 @@ ${photoSummaries}`;
           { role: "user", content: userContent },
         ],
         temperature: 0.1,
-        max_tokens: 4000,
+        max_tokens: 16000, // Aumentado para evitar truncamento
       }),
     });
 
@@ -197,19 +197,52 @@ ${photoSummaries}`;
       .replace(/```\n?/g, '')
       .trim();
 
-    console.log('[classify-batch] Resposta recebida');
+    console.log('[classify-batch] Resposta recebida, tamanho:', cleanContent.length);
 
     let aiResults;
     try {
       aiResults = JSON.parse(cleanContent);
     } catch (e) {
-      console.error('[classify-batch] Erro parse JSON:', cleanContent.substring(0, 500));
-      throw new Error("Resposta da IA não é JSON válido");
+      // Tenta recuperar JSON truncado
+      console.warn('[classify-batch] JSON inválido, tentando recuperar...');
+      
+      // Tenta encontrar o último objeto completo
+      let recoveredContent = cleanContent;
+      
+      // Se começa com [ mas não termina com ], tenta fechar
+      if (recoveredContent.startsWith('[') && !recoveredContent.endsWith(']')) {
+        // Encontra o último } completo
+        const lastBrace = recoveredContent.lastIndexOf('}');
+        if (lastBrace > 0) {
+          recoveredContent = recoveredContent.substring(0, lastBrace + 1) + ']';
+          console.log('[classify-batch] Tentando recuperar até posição:', lastBrace);
+        }
+      }
+      
+      try {
+        aiResults = JSON.parse(recoveredContent);
+        console.log('[classify-batch] JSON recuperado com sucesso!');
+      } catch (e2) {
+        // Última tentativa: extrai objetos individuais com regex
+        const objectMatches = cleanContent.match(/\{[^{}]*"id"\s*:\s*"[^"]+[^{}]*\}/g);
+        if (objectMatches && objectMatches.length > 0) {
+          console.log('[classify-batch] Recuperando', objectMatches.length, 'objetos via regex');
+          aiResults = objectMatches.map((m: string) => {
+            try { return JSON.parse(m); } catch { return null; }
+          }).filter(Boolean);
+        } else {
+          console.error('[classify-batch] Erro parse JSON irrecuperável:', cleanContent.substring(0, 500));
+          // Retorna resultados vazios ao invés de erro
+          aiResults = [];
+        }
+      }
     }
 
     if (!Array.isArray(aiResults)) {
       aiResults = [aiResults];
     }
+    
+    console.log('[classify-batch] Resultados parseados:', aiResults.length);
 
     // Mapeia resultados por id - SANITIZA valores
     const resultMap = new Map();

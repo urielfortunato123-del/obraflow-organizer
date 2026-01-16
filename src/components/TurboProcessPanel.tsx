@@ -25,7 +25,7 @@ interface TurboProcessPanelProps {
   onUpdatePhoto?: (id: string, updates: Partial<PhotoData>) => void;
 }
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 10; // Reduzido para evitar truncamento de resposta da IA
 const OCR_PARALLEL_LIMIT = 5;
 
 // ============================================
