@@ -138,6 +138,7 @@ PRIORIZE a análise visual se não houver texto descrevendo o serviço.`;
       date: parsed.date || null,
       local: parsed.local || null,
       servico: parsed.servico || null,
+      disciplina: parsed.disciplina || null, // Novo: identificado visualmente
       confidence: parsed.confidence || 0,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
