@@ -467,3 +467,81 @@ function parseLocalServico(text: string): { local: string | null; servico: strin
 
   return { local: text, servico: null };
 }
+
+// ============================================
+// ORDENAÇÃO DE FOTOS PARA VISUALIZAÇÃO
+// ============================================
+
+/**
+ * Ordena fotos para visualização na UI
+ * Ordem: EMPRESA > FRENTE (P01..P25 numérico) > DISCIPLINA > SERVIÇO > DATA > NOME
+ */
+export function sortPhotosForView<T extends {
+  folderPath?: string;
+  empresa?: string;
+  frente?: string;
+  disciplina?: string;
+  servico?: string;
+  dateIso?: string | null;
+  name?: string;
+  filename?: string;
+}>(photos: T[]): T[] {
+  const norm = (s?: string | null) =>
+    (s || '')
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const inferEmpresa = (p: T): string => {
+    const a = norm(p.empresa);
+    if (a) return a;
+    const fp = norm(p.folderPath);
+    if (fp.includes('DER') || fp.includes('DR')) return 'DER';
+    if (fp.includes('CCR')) return 'CCR';
+    if (fp.includes('SANSON')) return 'SANSON';
+    if (fp.includes('NUCLEO')) return 'NUCLEO';
+    return 'EMPRESA_NAO_INFORMADA';
+  };
+
+  const parseFrenteNum = (fr?: string): number => {
+    const m = norm(fr).match(/P(\d{1,2})\b/);
+    return m ? Number(m[1]) : 999;
+  };
+
+  return [...photos].sort((a, b) => {
+    // 1. Empresa
+    const ea = inferEmpresa(a);
+    const eb = inferEmpresa(b);
+    if (ea !== eb) return ea.localeCompare(eb);
+
+    // 2. Frente (P01..P25 ordenado numericamente, depois alfabético)
+    const fa = norm(a.frente);
+    const fb = norm(b.frente);
+    const na = parseFrenteNum(fa);
+    const nb = parseFrenteNum(fb);
+    if (na !== nb) return na - nb;
+    if (fa !== fb) return fa.localeCompare(fb);
+
+    // 3. Disciplina
+    const ca = norm(a.disciplina);
+    const cb = norm(b.disciplina);
+    if (ca !== cb) return ca.localeCompare(cb);
+
+    // 4. Serviço
+    const sa = norm(a.servico);
+    const sb = norm(b.servico);
+    if (sa !== sb) return sa.localeCompare(sb);
+
+    // 5. Data
+    const da = a.dateIso || '';
+    const db = b.dateIso || '';
+    if (da !== db) return da.localeCompare(db);
+
+    // 6. Nome do arquivo
+    const faName = a.filename || a.name || '';
+    const fbName = b.filename || b.name || '';
+    return faName.localeCompare(fbName);
+  });
+}
