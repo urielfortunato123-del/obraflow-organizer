@@ -176,24 +176,39 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
     
     // ============================================
     // FASE 0: OCR nas fotos que ainda não têm texto
+    // OTIMIZADO: Processa em paralelo (5 fotos por vez)
     // ============================================
     const photosNeedingOCR = photosToProcess.filter(p => !p.ocrText || p.ocrText.trim() === '');
+    const OCR_PARALLEL_LIMIT = 5; // Número de OCRs em paralelo
     
     if (photosNeedingOCR.length > 0 && onUpdatePhoto) {
-      console.log('[Turbo] FASE 0: Executando OCR em', photosNeedingOCR.length, 'fotos sem texto...');
+      console.log('[Turbo] FASE 0: Executando OCR em', photosNeedingOCR.length, 'fotos (paralelo:', OCR_PARALLEL_LIMIT, ')...');
       
       toast({
-        title: '📷 Executando OCR...',
-        description: `Extraindo texto de ${photosNeedingOCR.length} fotos`,
+        title: '📷 Executando OCR em paralelo...',
+        description: `Extraindo texto de ${photosNeedingOCR.length} fotos (${OCR_PARALLEL_LIMIT}x mais rápido)`,
       });
       
-      for (let i = 0; i < photosNeedingOCR.length; i++) {
-        const photo = photosNeedingOCR[i];
+      // Processa em lotes paralelos
+      for (let i = 0; i < photosNeedingOCR.length; i += OCR_PARALLEL_LIMIT) {
+        const batch = photosNeedingOCR.slice(i, i + OCR_PARALLEL_LIMIT);
         
-        try {
-          const ocrResult = await processOCR(photo.file, { useVision: true });
-          
-          if (ocrResult.text) {
+        // Executa OCR em paralelo para o lote
+        const ocrPromises = batch.map(async (photo) => {
+          try {
+            const ocrResult = await processOCR(photo.file, { useVision: true });
+            return { photo, ocrResult, success: true };
+          } catch (err) {
+            console.warn(`[Turbo] ⚠️ OCR falhou para ${photo.filename}:`, err);
+            return { photo, ocrResult: null, success: false };
+          }
+        });
+        
+        const results = await Promise.all(ocrPromises);
+        
+        // Processa resultados do lote
+        for (const { photo, ocrResult, success } of results) {
+          if (success && ocrResult?.text) {
             // Atualiza a foto com o texto OCR
             onUpdatePhoto(photo.id, {
               ocrText: ocrResult.text,
@@ -211,13 +226,11 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
             ocrCount++;
             console.log(`[Turbo] 📷 OCR OK: ${photo.filename} → "${ocrResult.text.substring(0, 80)}..."`);
           }
-        } catch (err) {
-          console.warn(`[Turbo] ⚠️ OCR falhou para ${photo.filename}:`, err);
-          // Continua mesmo se OCR falhar
         }
         
         // Progresso: Fase 0 = 0-20%
-        const phase0Progress = ((i + 1) / photosNeedingOCR.length) * 20;
+        const processed = Math.min(i + OCR_PARALLEL_LIMIT, photosNeedingOCR.length);
+        const phase0Progress = (processed / photosNeedingOCR.length) * 20;
         setProgress(phase0Progress);
       }
       
