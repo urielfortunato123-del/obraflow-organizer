@@ -209,23 +209,43 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
         
         // Processa resultados do lote
         for (const { photo, ocrResult, success } of results) {
-          if (success && ocrResult?.text) {
-            // Atualiza a foto com o texto OCR
-            onUpdatePhoto(photo.id, {
-              ocrText: ocrResult.text,
-            });
+          if (success && ocrResult) {
+            // Monta updates com todos os campos identificados pelo OCR Vision
+            const updates: Partial<PhotoData> = {
+              ocrText: ocrResult.text || '',
+            };
+            
+            // Se o OCR Vision identificou serviço/disciplina visualmente, usa!
+            if (ocrResult.servico) {
+              updates.servico = ocrResult.servico;
+              console.log(`[Turbo] 👁️ Serviço identificado visualmente: ${photo.filename} → ${ocrResult.servico}`);
+            }
+            if (ocrResult.disciplina) {
+              updates.disciplina = ocrResult.disciplina;
+              console.log(`[Turbo] 👁️ Disciplina identificada visualmente: ${photo.filename} → ${ocrResult.disciplina}`);
+            }
+            if (ocrResult.local) {
+              // Tenta usar como frente se parecer com código de frente
+              const localNorm = ocrResult.local.toUpperCase();
+              if (localNorm.includes('FREE') || localNorm.includes('BSO') || localNorm.includes('KM') || localNorm.includes('PRACA')) {
+                updates.frente = localNorm.replace(/\s+/g, '_');
+              }
+            }
+            
+            // Atualiza a foto
+            onUpdatePhoto(photo.id, updates);
             
             // Atualiza também no array local para usar na classificação
             const idx = photosToProcess.findIndex(p => p.id === photo.id);
             if (idx !== -1) {
               photosToProcess[idx] = {
                 ...photosToProcess[idx],
-                ocrText: ocrResult.text,
+                ...updates,
               };
             }
             
             ocrCount++;
-            console.log(`[Turbo] 📷 OCR OK: ${photo.filename} → "${ocrResult.text.substring(0, 80)}..."`);
+            console.log(`[Turbo] 📷 OCR OK: ${photo.filename} → texto: "${(ocrResult.text || '').substring(0, 60)}..."`);
           }
         }
         
