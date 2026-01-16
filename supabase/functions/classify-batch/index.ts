@@ -77,9 +77,10 @@ serve(async (req) => {
       // Todas já classificadas
       const results = photos.map(p => ({
         id: p.id,
-        frente: p.existingFrente || 'NAO_INFORMADO',
-        categoria: p.existingCategoria || 'NAO_INFORMADO',
-        servico: p.existingServico || 'NAO_INFORMADO',
+        frente: p.existingFrente || '',
+        categoria: p.existingCategoria || '',
+        servico: p.existingServico || '',
+        mode: 'AUTO' as const,
         confidence: 1.0,
       }));
       return new Response(JSON.stringify({ results }), {
@@ -93,50 +94,54 @@ serve(async (req) => {
       if (p.folderPath) parts.push(`pasta:"${p.folderPath}"`);
       if (p.filename) parts.push(`arquivo:"${p.filename}"`);
       if (p.ocrText) parts.push(`ocr:"${p.ocrText.substring(0, 150)}"`);
+      if (p.dateIso) parts.push(`data:${p.dateIso}`);
       if (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO') parts.push(`frente:${p.existingFrente}`);
       if (p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO') parts.push(`categoria:${p.existingCategoria}`);
       if (p.existingServico && p.existingServico !== 'NAO_INFORMADO') parts.push(`servico:${p.existingServico}`);
       return parts.join(' | ');
     }).join('\n');
 
-    // PROMPT FIXO - NÃO ALTERAR
-    const systemPrompt = `Você é um classificador técnico de fotos de obras.
+    // PROMPT OFICIAL - REGRAS ANTI-NULL
+    const systemPrompt = `Você é um classificador estrito de fotos de obra.
+Você recebe filename, folderPath, ocrText e date.
 
-Use folderPath, filename e ocrText.
+## REGRAS OBRIGATÓRIAS:
 
-Priorize SEMPRE informações explícitas da pasta.
+1. Você NÃO pode inventar categorias. Você deve escolher APENAS entre as listas oficiais:
+   - CATEGORIAS: ${CATEGORIAS.join(', ')}
+   - SERVICOS: ${SERVICOS.join(', ')}
+   - FRENTES: FREE_FLOW_P01 a P25, BSO_01 a BSO_08, PRACA_01 a PRACA_05, KM_XXX
 
-Escolha SOMENTE valores existentes nas listas fornecidas.
+2. Se não houver evidência suficiente para preencher os 3 campos com segurança, você NÃO deve preencher parcialmente.
 
-Se não houver certeza, retorne "NAO_INFORMADO" e reduza a confiança.
+3. Você DEVE retornar um campo "mode" com um destes valores:
+   - "AUTO": quando frente, categoria e servico forem selecionados com segurança
+   - "ROUTINE": quando NÃO dá para definir frente/categoria/servico, mas há evidência de data + local (KM, estaca, sentido, GPS mencionado, ou local detectável no texto/nome/pasta)
+   - "UNIDENTIFIED": quando a identificação for incompleta, duvidosa ou sem evidência de local/contexto
 
-Retorne APENAS JSON válido, sem texto extra.
+4. Confiança (confidence) deve ser número 0..1.
 
-## LISTAS DE VALORES PERMITIDOS:
+5. Se mode for "ROUTINE" ou "UNIDENTIFIED", deixe frente/categoria/servico como strings vazias ("").
 
-### CATEGORIAS:
-${CATEGORIAS.join(', ')}
+6. Se campo já preenchido (existingXxx), MANTER o valor.
 
-### SERVICOS:
-${SERVICOS.join(', ')}
+7. BC = Bacia Contenção = DRENAGEM
 
-### FRENTES (exemplos):
-- FREE_FLOW_P01 a P25
-- BSO_01 a BSO_08  
-- PRACA_01 a PRACA_05
-- KM_XXX (quilometragem)
+8. Fotos na MESMA pasta = geralmente MESMA classificação
 
-## REGRAS:
-1. Pasta define = NÃO mudar (maior prioridade)
-2. OCR confirma = aumenta confiança
-3. Se campo já preenchido (existingXxx), MANTER
-4. BC = Bacia Contenção = DRENAGEM
-5. Fotos na MESMA pasta = MESMA classificação
+## FORMATO DE RESPOSTA (JSON por foto):
+{
+  "id": "...",
+  "frente": "",
+  "categoria": "",
+  "servico": "",
+  "mode": "AUTO|ROUTINE|UNIDENTIFIED",
+  "confidence": 0.0,
+  "locationHint": "KM_070" // opcional: evidência de local encontrada
+}
 
-## FORMATO DE RESPOSTA:
-[
-  { "id": "xxx", "frente": "XXX", "categoria": "XXX", "servico": "XXX", "confidence": 0.0 }
-]`;
+NUNCA retornar null/undefined. NUNCA criar novas categorias.
+Retorne APENAS JSON válido, sem texto extra.`;
 
     const userContent = `Classifique estas ${photosNeedingAI.length} fotos:
 
@@ -206,15 +211,25 @@ ${photoSummaries}`;
       aiResults = [aiResults];
     }
 
-    // Mapeia resultados por id
+    // Mapeia resultados por id - SANITIZA valores
     const resultMap = new Map();
     for (const r of aiResults) {
       if (r.id) {
+        // Sanitiza: null/undefined/"null"/"undefined" -> ""
+        const sanitize = (v: any) => {
+          if (v === null || v === undefined) return '';
+          const s = String(v).trim();
+          if (s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined' || s === 'NAO_INFORMADO') return '';
+          return s;
+        };
+        
         resultMap.set(r.id, {
-          frente: r.frente || 'NAO_INFORMADO',
-          categoria: r.categoria || r.disciplina || 'NAO_INFORMADO',
-          servico: r.servico || 'NAO_INFORMADO',
-          confidence: r.confidence || 0.3,
+          frente: sanitize(r.frente),
+          categoria: sanitize(r.categoria) || sanitize(r.disciplina),
+          servico: sanitize(r.servico),
+          mode: r.mode || 'UNIDENTIFIED',
+          confidence: typeof r.confidence === 'number' ? r.confidence : 0.3,
+          locationHint: sanitize(r.locationHint),
         });
       }
     }
@@ -226,7 +241,7 @@ ${photoSummaries}`;
       if (!folder) continue;
       
       const result = resultMap.get(photo.id);
-      if (!result) continue;
+      if (!result || result.mode !== 'AUTO') continue;
       
       const key = `${result.frente}|${result.categoria}|${result.servico}`;
       if (!folderClassifications.has(folder)) {
@@ -253,18 +268,22 @@ ${photoSummaries}`;
       }
     }
 
-    // Monta resultado final
+    // Monta resultado final - NUNCA retorna null/undefined
     const finalResults = photos.map(p => {
-      // Se já tem classificação completa, mantém
-      if (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO' &&
-          p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO' &&
-          p.existingServico && p.existingServico !== 'NAO_INFORMADO') {
+      // Se já tem classificação completa, mantém como AUTO
+      const existingFrente = (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO') ? p.existingFrente : '';
+      const existingCategoria = (p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO') ? p.existingCategoria : '';
+      const existingServico = (p.existingServico && p.existingServico !== 'NAO_INFORMADO') ? p.existingServico : '';
+      
+      if (existingFrente && existingCategoria && existingServico) {
         return {
           id: p.id,
-          frente: p.existingFrente,
-          categoria: p.existingCategoria,
-          servico: p.existingServico,
+          frente: existingFrente,
+          categoria: existingCategoria,
+          servico: existingServico,
+          mode: 'AUTO' as const,
           confidence: 1.0,
+          locationHint: '',
         };
       }
 
@@ -274,35 +293,37 @@ ${photoSummaries}`;
       // Tenta propagação por pasta
       const folderResult = dominantByFolder.get(p.folderPath || '');
       
-      // Mescla: existente > IA > pasta > NAO_INFORMADO
-      const frente = 
-        (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO' ? p.existingFrente : null) ||
-        (aiResult?.frente !== 'NAO_INFORMADO' ? aiResult?.frente : null) ||
-        folderResult?.frente ||
-        'NAO_INFORMADO';
-        
-      const categoria = 
-        (p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO' ? p.existingCategoria : null) ||
-        (aiResult?.categoria !== 'NAO_INFORMADO' ? aiResult?.categoria : null) ||
-        folderResult?.categoria ||
-        'NAO_INFORMADO';
-        
-      const servico = 
-        (p.existingServico && p.existingServico !== 'NAO_INFORMADO' ? p.existingServico : null) ||
-        (aiResult?.servico !== 'NAO_INFORMADO' ? aiResult?.servico : null) ||
-        folderResult?.servico ||
-        'NAO_INFORMADO';
+      // Mescla: existente > IA > pasta > ""
+      const frente = existingFrente || aiResult?.frente || folderResult?.frente || '';
+      const categoria = existingCategoria || aiResult?.categoria || folderResult?.categoria || '';
+      const servico = existingServico || aiResult?.servico || folderResult?.servico || '';
+      
+      // Determina mode baseado no resultado
+      let mode: 'AUTO' | 'ROUTINE' | 'UNIDENTIFIED' = aiResult?.mode || 'UNIDENTIFIED';
+      
+      // Se conseguiu preencher tudo via propagação de pasta, é AUTO
+      if (frente && categoria && servico && folderResult) {
+        mode = 'AUTO';
+      }
 
       return {
         id: p.id,
         frente,
         categoria,
         servico,
+        mode,
         confidence: aiResult?.confidence || (folderResult ? 0.7 : 0.3),
+        locationHint: aiResult?.locationHint || '',
       };
     });
 
     console.log(`[classify-batch] ${finalResults.length} fotos processadas`);
+    
+    // Log de estatísticas
+    const autoCount = finalResults.filter(r => r.mode === 'AUTO').length;
+    const routineCount = finalResults.filter(r => r.mode === 'ROUTINE').length;
+    const unidCount = finalResults.filter(r => r.mode === 'UNIDENTIFIED').length;
+    console.log(`[classify-batch] Estatísticas: AUTO=${autoCount}, ROUTINE=${routineCount}, UNIDENTIFIED=${unidCount}`);
 
     return new Response(JSON.stringify({ results: finalResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

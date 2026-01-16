@@ -1,3 +1,10 @@
+// Modo de classificação da foto
+export type ClassificationMode = 'AUTO' | 'ROUTINE' | 'UNIDENTIFIED';
+
+// Pastas principais do sistema de fallback
+export const FOLDER_ROUTINE = 'FOTO_DE_ROTINA';
+export const FOLDER_UNIDENTIFIED = 'FOTOS_SEM_IDENTIFICACAO';
+
 export interface PhotoData {
   id: string;
   file: File;
@@ -23,6 +30,12 @@ export interface PhotoData {
   servico: string; // SERVIÇO (ex: LIMPEZA_TERRENO, ALVENARIA)
   aiStatus: 'pending' | 'processing' | 'success' | 'error' | 'skipped';
   aiConfidence: number | null;
+  
+  // Modo de classificação (AUTO = completo, ROUTINE = só data+local, UNIDENTIFIED = incompleto)
+  classificationMode?: ClassificationMode;
+  
+  // Hint de localização detectado (ex: "KM_070_080", "GPS", "ESTACA_120")
+  locationHint?: string;
   
   // Alertas
   alertas: string[]; // Ex: ["SEM PLACA DE IDENTIFICAÇÃO"]

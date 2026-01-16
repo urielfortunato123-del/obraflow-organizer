@@ -7,10 +7,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { format, parse } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { PhotoData } from '@/types/photo';
-import { DISCIPLINAS, SERVICOS } from '@/types/photo';
+import type { PhotoData, ClassificationMode } from '@/types/photo';
+import { DISCIPLINAS, SERVICOS, FOLDER_ROUTINE, FOLDER_UNIDENTIFIED } from '@/types/photo';
 import { normalizeName } from '@/utils/helpers';
 import { useToast } from '@/hooks/use-toast';
+import { computeYearMonthDay } from '@/utils/exportPath';
 
 interface ExportPreviewProps {
   photos: PhotoData[];
@@ -30,18 +31,94 @@ interface FolderNode {
   children: Map<string, FolderNode>;
 }
 
-function formatYearMonth(yearMonth: string | null): string {
-  if (!yearMonth) return 'SEM_DATA';
+// ============================================================================
+// FUNÇÕES ANTI-NULL (REGRAS OFICIAIS)
+// ============================================================================
+
+function sanitize(value: string | null | undefined, fallback: string): string {
+  if (value === null || value === undefined) return fallback;
+  const trimmed = String(value).trim();
+  if (trimmed === '' || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+    return fallback;
+  }
+  return trimmed;
+}
+
+function isCompleteClassification(photo: PhotoData): boolean {
+  const frente = sanitize(photo.frente, '');
+  const disciplina = sanitize(photo.disciplina, '');
+  const servico = sanitize(photo.servico, '');
+  
+  const invalidValues = [
+    '', 'NAO_INFORMADO', 'FRENTE_NAO_INFORMADA', 
+    'DISCIPLINA_NAO_INFORMADA', 'SERVICO_NAO_INFORMADO',
+    'SERVICO_NAO_IDENTIFICADO', 'SEM_DISCIPLINA', 'SEM_SERVICO'
+  ];
+  
+  return !invalidValues.includes(frente.toUpperCase()) &&
+         !invalidValues.includes(disciplina.toUpperCase()) &&
+         !invalidValues.includes(servico.toUpperCase());
+}
+
+function hasLocationHint(photo: PhotoData): boolean {
+  const text = [
+    photo.ocrText || '',
+    photo.filename || '',
+    photo.folderPath || '',
+    photo.locationHint || ''
+  ].join(' ').toUpperCase();
+  
+  const locationPatterns = [
+    /KM[_\s]?\d+/, /ESTACA[_\s]?\d+/, /SENTIDO/, /GPS/,
+    /LAT[ITUDE]?/, /LONG[ITUDE]?/, /FREE_?FLOW/, /BSO[_\s]?\d+/,
+    /PRACA[_\s]?\d+/, /TRECHO/, /PISTA/,
+  ];
+  
+  return locationPatterns.some(pattern => pattern.test(text));
+}
+
+function extractDateFolder(photo: PhotoData): { yearMonth: string; day: string } {
+  if (photo.dateIso && /^\d{4}-\d{2}-\d{2}$/.test(photo.dateIso)) {
+    return { yearMonth: photo.dateIso.substring(0, 7), day: photo.dateIso.substring(8, 10) };
+  }
+  if (photo.yearMonth && /^\d{4}-\d{2}$/.test(photo.yearMonth)) {
+    return { yearMonth: photo.yearMonth, day: photo.day || 'SEM_DIA' };
+  }
+  if (photo.file?.lastModified) {
+    const { yearMonth, day } = computeYearMonthDay(null, photo.file.lastModified);
+    return { yearMonth, day };
+  }
+  return { yearMonth: 'SEM_DATA', day: 'SEM_DIA' };
+}
+
+function decideMainFolder(photo: PhotoData): ClassificationMode {
+  if (photo.classificationMode === 'ROUTINE') return 'ROUTINE';
+  if (photo.classificationMode === 'UNIDENTIFIED') return 'UNIDENTIFIED';
+  
+  if (isCompleteClassification(photo)) {
+    const confidence = photo.aiConfidence ?? 1.0;
+    if (confidence >= 0.5) return 'AUTO';
+  }
+  
+  const { yearMonth } = extractDateFolder(photo);
+  const hasValidDate = yearMonth !== 'SEM_DATA';
+  if (hasValidDate && hasLocationHint(photo)) return 'ROUTINE';
+  
+  return 'UNIDENTIFIED';
+}
+
+function formatYearMonth(yearMonth: string): string {
+  if (!yearMonth || yearMonth === 'SEM_DATA') return 'SEM_DATA';
   const [year, month] = yearMonth.split('-');
+  if (!year || !month) return 'SEM_DATA';
   const monthNames = ['', 'JANEIRO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
   const monthNum = parseInt(month, 10);
   return `${month}_${monthNames[monthNum] || 'MES'}_${year}`;
 }
 
-function formatDay(dateIso: string | null): string {
-  if (!dateIso) return 'SEM_DIA';
-  const day = dateIso.split('-')[2];
-  const month = dateIso.split('-')[1];
+function formatDay(day: string, yearMonth: string): string {
+  if (!day || day === 'SEM_DIA') return 'SEM_DIA';
+  const month = yearMonth?.split('-')[1] || '00';
   return `${day}_${month}`;
 }
 
@@ -59,63 +136,85 @@ function buildExportTree(photos: PhotoData[]): FolderNode {
   const processedPhotos = photos.filter(p => p.status === 'OK' || p.frente || p.servico);
 
   for (const photo of processedPhotos) {
-    const frente = normalizeName(photo.frente || 'FRENTE_NAO_INFORMADA');
-    const disciplina = normalizeName(photo.disciplina || 'DISCIPLINA_NAO_INFORMADA');
-    const servico = normalizeName(photo.servico || 'SERVICO_NAO_INFORMADO');
-    const mes = formatYearMonth(photo.yearMonth);
-    const dia = formatDay(photo.dateIso);
+    const mode = decideMainFolder(photo);
+    const { yearMonth, day } = extractDateFolder(photo);
+    const mes = formatYearMonth(yearMonth);
+    const dia = formatDay(day, yearMonth);
     
-    // Estrutura: FRENTE > DISCIPLINA > SERVIÇO > MÊS > DIA > fotos
     let currentNode = root;
     
-    // Nível 1: Frente
-    if (!currentNode.children.has(frente)) {
-      currentNode.children.set(frente, {
-        name: frente,
-        displayName: photo.frente || 'FRENTE NÃO INFORMADA',
-        path: frente,
-        level: 'frente',
-        imageCount: 0,
-        images: [],
-        children: new Map(),
-      });
+    if (mode === 'AUTO') {
+      // Estrutura completa: FRENTE > DISCIPLINA > SERVIÇO > MÊS > DIA
+      const frente = normalizeName(sanitize(photo.frente, FOLDER_UNIDENTIFIED));
+      const disciplina = normalizeName(sanitize(photo.disciplina, 'SEM_DISCIPLINA'));
+      const servico = normalizeName(sanitize(photo.servico, 'SEM_SERVICO'));
+      
+      // Nível 1: Frente
+      if (!currentNode.children.has(frente)) {
+        currentNode.children.set(frente, {
+          name: frente,
+          displayName: photo.frente || frente,
+          path: frente,
+          level: 'frente',
+          imageCount: 0,
+          images: [],
+          children: new Map(),
+        });
+      }
+      currentNode = currentNode.children.get(frente)!;
+      
+      // Nível 2: Disciplina
+      if (!currentNode.children.has(disciplina)) {
+        currentNode.children.set(disciplina, {
+          name: disciplina,
+          displayName: photo.disciplina || disciplina,
+          path: `${frente}/${disciplina}`,
+          level: 'disciplina',
+          imageCount: 0,
+          images: [],
+          children: new Map(),
+        });
+      }
+      currentNode = currentNode.children.get(disciplina)!;
+      
+      // Nível 3: Serviço
+      if (!currentNode.children.has(servico)) {
+        currentNode.children.set(servico, {
+          name: servico,
+          displayName: photo.servico || servico,
+          path: `${frente}/${disciplina}/${servico}`,
+          level: 'servico',
+          imageCount: 0,
+          images: [],
+          children: new Map(),
+        });
+      }
+      currentNode = currentNode.children.get(servico)!;
+    } else {
+      // ROUTINE ou UNIDENTIFIED: pasta principal única
+      const folderName = mode === 'ROUTINE' ? FOLDER_ROUTINE : FOLDER_UNIDENTIFIED;
+      const displayName = mode === 'ROUTINE' ? '📸 FOTO DE ROTINA' : '❓ FOTOS SEM IDENTIFICAÇÃO';
+      
+      if (!currentNode.children.has(folderName)) {
+        currentNode.children.set(folderName, {
+          name: folderName,
+          displayName: displayName,
+          path: folderName,
+          level: 'frente',
+          imageCount: 0,
+          images: [],
+          children: new Map(),
+        });
+      }
+      currentNode = currentNode.children.get(folderName)!;
     }
-    currentNode = currentNode.children.get(frente)!;
     
-    // Nível 2: Disciplina
-    if (!currentNode.children.has(disciplina)) {
-      currentNode.children.set(disciplina, {
-        name: disciplina,
-        displayName: photo.disciplina || 'DISCIPLINA NÃO INFORMADA',
-        path: `${frente}/${disciplina}`,
-        level: 'disciplina',
-        imageCount: 0,
-        images: [],
-        children: new Map(),
-      });
-    }
-    currentNode = currentNode.children.get(disciplina)!;
-    
-    // Nível 3: Serviço
-    if (!currentNode.children.has(servico)) {
-      currentNode.children.set(servico, {
-        name: servico,
-        displayName: photo.servico || 'SERVIÇO NÃO INFORMADO',
-        path: `${frente}/${disciplina}/${servico}`,
-        level: 'servico',
-        imageCount: 0,
-        images: [],
-        children: new Map(),
-      });
-    }
-    currentNode = currentNode.children.get(servico)!;
-    
-    // Nível 4: Mês
+    // Nível: Mês (sempre)
     if (!currentNode.children.has(mes)) {
       currentNode.children.set(mes, {
         name: mes,
         displayName: mes,
-        path: `${frente}/${disciplina}/${servico}/${mes}`,
+        path: `${currentNode.path}/${mes}`,
         level: 'mes',
         imageCount: 0,
         images: [],
@@ -124,12 +223,12 @@ function buildExportTree(photos: PhotoData[]): FolderNode {
     }
     currentNode = currentNode.children.get(mes)!;
     
-    // Nível 5: Dia
+    // Nível: Dia (sempre)
     if (!currentNode.children.has(dia)) {
       currentNode.children.set(dia, {
         name: dia,
         displayName: dia,
-        path: `${frente}/${disciplina}/${servico}/${mes}/${dia}`,
+        path: `${currentNode.path}/${dia}`,
         level: 'dia',
         imageCount: 0,
         images: [],
