@@ -17,6 +17,7 @@ import type { PhotoData } from '@/types/photo';
 import { useToast } from '@/hooks/use-toast';
 import { classifyPhoto, needsReview, propagateByFolder, determineStatus } from '@/utils/classification';
 import { extractDateFromFile } from '@/utils/exportPath';
+import { processOCR } from '@/utils/ocr';
 import { 
   inferDisciplinaFromPath, 
   inferFrenteFromPath, 
@@ -29,6 +30,7 @@ interface TurboProcessPanelProps {
   photos: PhotoData[];
   onBatchUpdate: (ids: string[], updates: Partial<PhotoData>) => void;
   onScrollToPhoto?: (photoId: string) => void;
+  onUpdatePhoto?: (id: string, updates: Partial<PhotoData>) => void;
 }
 
 const BATCH_SIZE = 50; // Fotos por lote para a IA
@@ -51,7 +53,7 @@ interface AnalysisResult {
   reason?: string;
 }
 
-export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: TurboProcessPanelProps) {
+export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUpdatePhoto }: TurboProcessPanelProps) {
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -163,13 +165,64 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     setErrorCount(0);
     setUnrecognizedPhotos([]);
 
-    const photosToProcess = [...stats.unclassifiedPhotos];
+    let photosToProcess = [...stats.unclassifiedPhotos];
     const newUnrecognized: AnalysisResult[] = [];
     
+    let ocrCount = 0;
     let localMatchCount = 0;
     let aiProcessCount = 0;
     let successCount = 0;
     let errors = 0;
+    
+    // ============================================
+    // FASE 0: OCR nas fotos que ainda não têm texto
+    // ============================================
+    const photosNeedingOCR = photosToProcess.filter(p => !p.ocrText || p.ocrText.trim() === '');
+    
+    if (photosNeedingOCR.length > 0 && onUpdatePhoto) {
+      console.log('[Turbo] FASE 0: Executando OCR em', photosNeedingOCR.length, 'fotos sem texto...');
+      
+      toast({
+        title: '📷 Executando OCR...',
+        description: `Extraindo texto de ${photosNeedingOCR.length} fotos`,
+      });
+      
+      for (let i = 0; i < photosNeedingOCR.length; i++) {
+        const photo = photosNeedingOCR[i];
+        
+        try {
+          const ocrResult = await processOCR(photo.file, { useVision: true });
+          
+          if (ocrResult.text) {
+            // Atualiza a foto com o texto OCR
+            onUpdatePhoto(photo.id, {
+              ocrText: ocrResult.text,
+            });
+            
+            // Atualiza também no array local para usar na classificação
+            const idx = photosToProcess.findIndex(p => p.id === photo.id);
+            if (idx !== -1) {
+              photosToProcess[idx] = {
+                ...photosToProcess[idx],
+                ocrText: ocrResult.text,
+              };
+            }
+            
+            ocrCount++;
+            console.log(`[Turbo] 📷 OCR OK: ${photo.filename} → "${ocrResult.text.substring(0, 80)}..."`);
+          }
+        } catch (err) {
+          console.warn(`[Turbo] ⚠️ OCR falhou para ${photo.filename}:`, err);
+          // Continua mesmo se OCR falhar
+        }
+        
+        // Progresso: Fase 0 = 0-20%
+        const phase0Progress = ((i + 1) / photosNeedingOCR.length) * 20;
+        setProgress(phase0Progress);
+      }
+      
+      console.log(`[Turbo] FASE 0 concluída: ${ocrCount} fotos com OCR extraído`);
+    }
     
     // ============================================
     // FASE 1: Classificação local inteligente
@@ -341,10 +394,10 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
       console.log(`[Turbo] FASE 1.5 concluída: ${stillNeedAI.length} ainda precisam de IA`);
     }
     
-    // Atualiza progresso após fase 1
-    const phase1Progress = photosToProcess.length > 0 
-      ? (localMatchCount / photosToProcess.length) * 40 // Fase 1 = 40% do progresso
-      : 0;
+    // Atualiza progresso após fase 1 (20-50%)
+    const phase1Progress = 20 + (photosToProcess.length > 0 
+      ? (localMatchCount / photosToProcess.length) * 30
+      : 0);
     setProgress(phase1Progress);
     setProcessedCount(localMatchCount);
     
@@ -542,8 +595,8 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
         setProcessedCount(localMatchCount + aiProcessCount);
         setErrorCount(errors);
         
-        // Progresso: 40% fase 1 + 60% fase 2
-        const phase2Progress = 40 + (((i + 1) / batches) * 60);
+        // Progresso: 0-20% OCR, 20-50% fase 1, 50-100% fase 2
+        const phase2Progress = 50 + (((i + 1) / batches) * 50);
         setProgress(phase2Progress);
 
         if (i < batches - 1) {
@@ -561,16 +614,17 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
     }
 
     // Mensagem final com estatísticas
-    const aiSaved = localMatchCount > 0 ? ` 🚀 ${localMatchCount} classificadas localmente (sem IA)!` : '';
-    const aiUsed = aiProcessCount > 0 ? ` 🤖 ${aiProcessCount} processadas por IA.` : '';
+    const ocrDone = ocrCount > 0 ? ` 📷 ${ocrCount} OCR extraído.` : '';
+    const aiSaved = localMatchCount > 0 ? ` 🚀 ${localMatchCount} classificadas localmente.` : '';
+    const aiUsed = aiProcessCount > 0 ? ` 🤖 ${aiProcessCount} por IA.` : '';
     const okCount = photos.filter(p => p.status === 'OK').length + successCount;
     
     toast({
       title: 'Processamento TURBO concluído!',
-      description: `✅ ${okCount} fotos prontas.${aiSaved}${aiUsed}${newUnrecognized.length > 0 ? ` ⚠️ ${newUnrecognized.length} para verificar.` : ''}`,
+      description: `✅ ${okCount} fotos prontas.${ocrDone}${aiSaved}${aiUsed}${newUnrecognized.length > 0 ? ` ⚠️ ${newUnrecognized.length} para verificar.` : ''}`,
     });
 
-  }, [stats.unclassifiedPhotos, photos, onBatchUpdate, toast]);
+  }, [stats.unclassifiedPhotos, photos, onBatchUpdate, onUpdatePhoto, toast]);
 
   // Propaga classificação de uma foto para todas da mesma pasta
   const propagateFromFolder = useCallback((folderPath: string) => {
