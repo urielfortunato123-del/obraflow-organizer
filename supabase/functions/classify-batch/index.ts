@@ -5,20 +5,25 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Categorias de trabalho expandidas
-const WORK_CATEGORIES = [
-  'TERRAPLANAGEM', 'PAVIMENTAÇÃO', 'DRENAGEM', 'SINALIZAÇÃO',
-  'ESTRUTURA', 'FUNDAÇÃO', 'ALVENARIA', 'COBERTURA',
-  'ACABAMENTO_INTERNO', 'ACABAMENTO_EXTERNO',
-  'INSTALAÇÕES_ELÉTRICAS', 'INSTALAÇÕES_HIDRÁULICAS',
-  'PAISAGISMO', 'LIMPEZA', 'DEMOLIÇÃO', 'MANUTENÇÃO', 'SEGURANÇA',
+// Listas de valores permitidos
+const CATEGORIAS = [
+  'TERRAPLANAGEM', 'PAVIMENTACAO', 'DRENAGEM', 'SINALIZACAO',
+  'ESTRUTURA', 'FUNDACAO', 'ALVENARIA', 'COBERTURA',
+  'INSTALACOES_ELETRICAS', 'INSTALACOES_HIDRAULICAS',
+  'PAISAGISMO', 'LIMPEZA', 'DEMOLICAO', 'MANUTENCAO',
 ];
 
-// Serviços comuns
-const SERVICE_TYPES = [
-  'ESCAVAÇÃO', 'ATERRO', 'COMPACTAÇÃO', 'CONCRETAGEM', 'ARMAÇÃO',
-  'PINTURA', 'REBOCO', 'REVESTIMENTO', 'IMPERMEABILIZAÇÃO',
-  'INSTALAÇÃO', 'MANUTENÇÃO', 'INSPEÇÃO', 'LIMPEZA', 'ROÇADA',
+const SERVICOS = [
+  'LIMPEZA_DE_TERRENO', 'ROCADA_MECANIZADA', 'ROCADA_MANUAL',
+  'ESCAVACAO_DE_VALA', 'ESCAVACAO_MECANIZADA', 'MOVIMENTACAO_DE_TERRA',
+  'ATERRO', 'COMPACTACAO', 'REGULARIZACAO_SUBLEITO',
+  'ASSENTAMENTO_DE_TUBOS', 'EXECUCAO_DE_DRENAGEM', 'LIMPEZA_DE_BUEIRO',
+  'CONCRETAGEM', 'ARMACAO_DE_ACO', 'EXECUCAO_DE_FORMA', 'LANCAMENTO_CONCRETO',
+  'EXECUCAO_DE_BASE', 'EXECUCAO_DE_PAVIMENTO', 'FRESAGEM', 'RECAPEAMENTO',
+  'SINALIZACAO_HORIZONTAL', 'SINALIZACAO_VERTICAL', 'IMPLANTACAO_DE_PLACAS',
+  'PLANTIO_DE_GRAMA', 'PAISAGISMO',
+  'PINTURA', 'REBOCO', 'REVESTIMENTO',
+  'MANUTENCAO_PREVENTIVA', 'MANUTENCAO_CORRETIVA', 'INSPECAO', 'VISTORIA',
 ];
 
 interface PhotoInput {
@@ -27,7 +32,11 @@ interface PhotoInput {
   folderPath?: string;
   ocrText?: string;
   dateIso?: string;
-  yearMonth?: string;
+  empresa?: string;
+  // Campos já extraídos (para IA não sobrescrever)
+  existingFrente?: string;
+  existingCategoria?: string;
+  existingServico?: string;
 }
 
 interface BatchRequest {
@@ -56,86 +65,82 @@ serve(async (req) => {
 
     console.log(`[classify-batch] Processando ${photos.length} fotos...`);
 
-    // Agrupa fotos por pasta para otimizar
-    const byFolder = new Map<string, PhotoInput[]>();
-    for (const photo of photos) {
-      const folder = photo.folderPath || 'root';
-      if (!byFolder.has(folder)) {
-        byFolder.set(folder, []);
-      }
-      byFolder.get(folder)!.push(photo);
+    // Filtra fotos que precisam de classificação (não tem todos os campos)
+    const photosNeedingAI = photos.filter(p => {
+      const hasFrente = p.existingFrente && p.existingFrente !== 'NAO_INFORMADO';
+      const hasCategoria = p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO';
+      const hasServico = p.existingServico && p.existingServico !== 'NAO_INFORMADO';
+      return !hasFrente || !hasCategoria || !hasServico;
+    });
+
+    if (photosNeedingAI.length === 0) {
+      // Todas já classificadas
+      const results = photos.map(p => ({
+        id: p.id,
+        frente: p.existingFrente || 'NAO_INFORMADO',
+        categoria: p.existingCategoria || 'NAO_INFORMADO',
+        servico: p.existingServico || 'NAO_INFORMADO',
+        confidence: 1.0,
+      }));
+      return new Response(JSON.stringify({ results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Cria um resumo compacto para a IA
-    const photoSummaries = photos.map((p, i) => {
-      const parts = [];
-      parts.push(`[${i}] ${p.filename}`);
-      if (p.folderPath) parts.push(`pasta: ${p.folderPath}`);
-      if (p.ocrText) parts.push(`texto: "${p.ocrText.substring(0, 100)}..."`);
-      if (p.dateIso) parts.push(`data: ${p.dateIso}`);
+    // Cria resumo compacto para a IA
+    const photoSummaries = photosNeedingAI.map((p, i) => {
+      const parts = [`[${i}] id:${p.id}`];
+      if (p.folderPath) parts.push(`pasta:"${p.folderPath}"`);
+      if (p.filename) parts.push(`arquivo:"${p.filename}"`);
+      if (p.ocrText) parts.push(`ocr:"${p.ocrText.substring(0, 150)}"`);
+      if (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO') parts.push(`frente:${p.existingFrente}`);
+      if (p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO') parts.push(`categoria:${p.existingCategoria}`);
+      if (p.existingServico && p.existingServico !== 'NAO_INFORMADO') parts.push(`servico:${p.existingServico}`);
       return parts.join(' | ');
     }).join('\n');
 
-    const systemPrompt = `Você é um classificador ULTRA-INTELIGENTE de fotos de obras de engenharia civil e rodovias.
-Sua missão é classificar TODAS as fotos, mesmo com informações mínimas.
+    // PROMPT FIXO - NÃO ALTERAR
+    const systemPrompt = `Você é um classificador técnico de fotos de obras.
 
-RETORNE APENAS um array JSON válido (sem markdown) com objetos para CADA foto:
+Use folderPath, filename e ocrText.
+
+Priorize SEMPRE informações explícitas da pasta.
+
+Escolha SOMENTE valores existentes nas listas fornecidas.
+
+Se não houver certeza, retorne "NAO_INFORMADO" e reduza a confiança.
+
+Retorne APENAS JSON válido, sem texto extra.
+
+## LISTAS DE VALORES PERMITIDOS:
+
+### CATEGORIAS:
+${CATEGORIAS.join(', ')}
+
+### SERVICOS:
+${SERVICOS.join(', ')}
+
+### FRENTES (exemplos):
+- FREE_FLOW_P01 a P25
+- BSO_01 a BSO_08  
+- PRACA_01 a PRACA_05
+- KM_XXX (quilometragem)
+
+## REGRAS:
+1. Pasta define = NÃO mudar (maior prioridade)
+2. OCR confirma = aumenta confiança
+3. Se campo já preenchido (existingXxx), MANTER
+4. BC = Bacia Contenção = DRENAGEM
+5. Fotos na MESMA pasta = MESMA classificação
+
+## FORMATO DE RESPOSTA:
 [
-  { "id": "id_da_foto", "frente": "LOCAL", "disciplina": "CATEGORIA", "servico": "TIPO" },
-  ...
-]
+  { "id": "xxx", "frente": "XXX", "categoria": "XXX", "servico": "XXX", "confidence": 0.0 }
+]`;
 
-## REGRAS DE CLASSIFICAÇÃO:
+    const userContent = `Classifique estas ${photosNeedingAI.length} fotos:
 
-### 1. FRENTE (Local da obra)
-- FREE_FLOW_P01 a P25 = Praças de pedágio Free Flow
-- BSO_01 a 08 = Base de Serviço Operacional
-- PRACA_01 a 05 = Praças de pedágio
-- KM_XXX = Quilometragem
-- Se não souber: "FRENTE_NAO_INFORMADA"
-
-### 2. DISCIPLINA (Área técnica) - ESCOLHA UMA:
-${WORK_CATEGORIES.join(', ')}
-
-### 3. SERVIÇO (Atividade) - ESCOLHA UM:
-${SERVICE_TYPES.join(', ')}
-
-## SIGLAS COMUNS EM PASTAS:
-- BC = Bacia de Contenção, Bloco C, ou Base Canteiro → DRENAGEM ou ESTRUTURA
-- BL = Bloco → ESTRUTURA
-- BSO = Base Serviço Operacional → frente: BSO_XX
-- FF ou FREE_FLOW = Free Flow → frente: FREE_FLOW_XX
-- TERR = Terraplanagem → disciplina: TERRAPLANAGEM
-- PAV = Pavimentação → disciplina: PAVIMENTAÇÃO
-- DREN = Drenagem → disciplina: DRENAGEM
-- SIN = Sinalização → disciplina: SINALIZAÇÃO
-- EST = Estrutura → disciplina: ESTRUTURA
-- AGOSTO, SETEMBRO, etc = Mês (não é disciplina!)
-
-## REGRAS CRÍTICAS:
-1. NUNCA deixe campos vazios - sempre classifique com seu melhor palpite
-2. Fotos na MESMA PASTA = MESMA classificação
-3. Se a pasta for só um mês (AGOSTO, JANEIRO...), tente classificar pelo nome do arquivo
-4. WhatsApp Image = foto genérica, use contexto da pasta
-5. Se não tiver NENHUMA pista, use TERRAPLANAGEM como fallback (mais comum em obras)
-6. BC + número (BC1, BC2) provavelmente é DRENAGEM (Bacia de Contenção)
-
-## EXEMPLOS:
-- pasta "AGOSTO/BC2" → disciplina: DRENAGEM (Bacia de Contenção 2)
-- pasta "TERRAPLANAGEM/ESCAVACAO" → disciplina: TERRAPLANAGEM, servico: ESCAVAÇÃO
-- pasta "FREE_FLOW_P03" → frente: FREE_FLOW_P03
-- pasta "JANEIRO/FOTOS" → tente classificar, ou use TERRAPLANAGEM como fallback`;
-
-    const userContent = `Classifique TODAS estas ${photos.length} fotos de obra:
-
-${photoSummaries}
-
-IMPORTANTE: 
-- Retorne um objeto para CADA foto pelo id
-- Não deixe nenhum campo como NAO_INFORMADA se puder adivinhar
-- BC2 provavelmente significa Bacia de Contenção 2 (DRENAGEM)
-- Use seu melhor julgamento!`;
-
+${photoSummaries}`;
 
     console.log('[classify-batch] Chamando Lovable AI...');
 
@@ -151,7 +156,7 @@ IMPORTANTE:
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-        temperature: 0.2,
+        temperature: 0.1,
         max_tokens: 4000,
       }),
     });
@@ -189,63 +194,115 @@ IMPORTANTE:
 
     console.log('[classify-batch] Resposta recebida');
 
-    let results;
+    let aiResults;
     try {
-      results = JSON.parse(cleanContent);
+      aiResults = JSON.parse(cleanContent);
     } catch (e) {
-      console.error('[classify-batch] Erro parse JSON:', cleanContent);
+      console.error('[classify-batch] Erro parse JSON:', cleanContent.substring(0, 500));
       throw new Error("Resposta da IA não é JSON válido");
     }
 
-    // Garante que é um array
-    if (!Array.isArray(results)) {
-      results = [results];
+    if (!Array.isArray(aiResults)) {
+      aiResults = [aiResults];
     }
 
     // Mapeia resultados por id
     const resultMap = new Map();
-    for (const r of results) {
+    for (const r of aiResults) {
       if (r.id) {
         resultMap.set(r.id, {
-          frente: r.frente || r.local || 'FRENTE_NAO_INFORMADA',
-          disciplina: r.disciplina || r.categoria || 'DISCIPLINA_NAO_INFORMADA',
-          servico: r.servico || 'SERVICO_NAO_IDENTIFICADO',
+          frente: r.frente || 'NAO_INFORMADO',
+          categoria: r.categoria || r.disciplina || 'NAO_INFORMADO',
+          servico: r.servico || 'NAO_INFORMADO',
+          confidence: r.confidence || 0.3,
         });
       }
     }
 
-    // Propaga classificação para fotos não classificadas na mesma pasta
-    for (const [folder, folderPhotos] of byFolder) {
-      // Encontra uma foto classificada nesta pasta
-      let classification = null;
-      for (const p of folderPhotos) {
-        if (resultMap.has(p.id)) {
-          classification = resultMap.get(p.id);
-          break;
+    // Propaga classificação por pasta (5+ fotos com mesma classificação)
+    const folderClassifications = new Map<string, Map<string, number>>();
+    for (const photo of photos) {
+      const folder = photo.folderPath || '';
+      if (!folder) continue;
+      
+      const result = resultMap.get(photo.id);
+      if (!result) continue;
+      
+      const key = `${result.frente}|${result.categoria}|${result.servico}`;
+      if (!folderClassifications.has(folder)) {
+        folderClassifications.set(folder, new Map());
+      }
+      const counts = folderClassifications.get(folder)!;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+
+    // Encontra classificação dominante por pasta (>=5 fotos ou >=70% da pasta)
+    const dominantByFolder = new Map<string, { frente: string; categoria: string; servico: string }>();
+    for (const [folder, counts] of folderClassifications) {
+      let maxCount = 0;
+      let dominantKey = '';
+      for (const [key, count] of counts) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantKey = key;
         }
       }
-      
-      // Aplica a todas as fotos da pasta sem classificação
-      if (classification) {
-        for (const p of folderPhotos) {
-          if (!resultMap.has(p.id)) {
-            resultMap.set(p.id, classification);
-          }
-        }
+      if (maxCount >= 5 || maxCount >= photos.filter(p => p.folderPath === folder).length * 0.7) {
+        const [frente, categoria, servico] = dominantKey.split('|');
+        dominantByFolder.set(folder, { frente, categoria, servico });
       }
     }
 
-    // Converte de volta para array
-    const finalResults = photos.map(p => ({
-      id: p.id,
-      ...(resultMap.get(p.id) || {
-        frente: 'FRENTE_NAO_INFORMADA',
-        disciplina: 'DISCIPLINA_NAO_INFORMADA',
-        servico: 'SERVICO_NAO_IDENTIFICADO',
-      }),
-    }));
+    // Monta resultado final
+    const finalResults = photos.map(p => {
+      // Se já tem classificação completa, mantém
+      if (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO' &&
+          p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO' &&
+          p.existingServico && p.existingServico !== 'NAO_INFORMADO') {
+        return {
+          id: p.id,
+          frente: p.existingFrente,
+          categoria: p.existingCategoria,
+          servico: p.existingServico,
+          confidence: 1.0,
+        };
+      }
 
-    console.log(`[classify-batch] ${finalResults.length} fotos classificadas`);
+      // Tenta da IA
+      const aiResult = resultMap.get(p.id);
+      
+      // Tenta propagação por pasta
+      const folderResult = dominantByFolder.get(p.folderPath || '');
+      
+      // Mescla: existente > IA > pasta > NAO_INFORMADO
+      const frente = 
+        (p.existingFrente && p.existingFrente !== 'NAO_INFORMADO' ? p.existingFrente : null) ||
+        (aiResult?.frente !== 'NAO_INFORMADO' ? aiResult?.frente : null) ||
+        folderResult?.frente ||
+        'NAO_INFORMADO';
+        
+      const categoria = 
+        (p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO' ? p.existingCategoria : null) ||
+        (aiResult?.categoria !== 'NAO_INFORMADO' ? aiResult?.categoria : null) ||
+        folderResult?.categoria ||
+        'NAO_INFORMADO';
+        
+      const servico = 
+        (p.existingServico && p.existingServico !== 'NAO_INFORMADO' ? p.existingServico : null) ||
+        (aiResult?.servico !== 'NAO_INFORMADO' ? aiResult?.servico : null) ||
+        folderResult?.servico ||
+        'NAO_INFORMADO';
+
+      return {
+        id: p.id,
+        frente,
+        categoria,
+        servico,
+        confidence: aiResult?.confidence || (folderResult ? 0.7 : 0.3),
+      };
+    });
+
+    console.log(`[classify-batch] ${finalResults.length} fotos processadas`);
 
     return new Response(JSON.stringify({ results: finalResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
