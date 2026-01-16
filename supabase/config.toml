@@ -2,3 +2,15 @@ project_id = "hyuieqsxlrgjyuatrhqs"
 
 [functions.classify-photo]
 verify_jwt = false
+
+[functions.ocr-groq]
+verify_jwt = false
+
+[functions.ocr-multi]
+verify_jwt = false
+
+[functions.ocr-vision]
+verify_jwt = false
+
+[functions.classify-batch]
+verify_jwt = false
