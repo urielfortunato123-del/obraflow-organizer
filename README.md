@@ -93,19 +93,26 @@ Para fotos que precisam de ajuste:
   - Navegação entre fotos
 - **Árvore de Pastas**: Visualização hierárquica da estrutura final
 
-### 5. Exportação
+### 5. Exportação (REGRAS ANTI-NULL)
+
+O sistema implementa **4 regras obrigatórias** para nunca criar pastas `null`, `undefined` ou vazias:
+
+| Regra | Condição | Estrutura de Pasta |
+|-------|----------|-------------------|
+| **Regra 0** | Nunca criar pasta null/undefined/"" | - |
+| **Regra 1** | Classificação completa (frente + disciplina + serviço válidos) | `FRENTE/DISCIPLINA/SERVICO/MM_MES_AAAA/DD_MM/foto.jpg` |
+| **Regra 2** | Sem categoria, mas tem DATA + LOCAL (KM, GPS, estaca) | `FOTO_DE_ROTINA/MM_MES_AAAA/DD_MM/foto.jpg` |
+| **Regra 3** | Incompleto, duvidoso ou sem evidência de local | `FOTOS_SEM_IDENTIFICACAO/MM_MES_AAAA/DD_MM/foto.jpg` |
+| **Regra 4** | Fallback final (sem data) | `FOTOS_SEM_IDENTIFICACAO/SEM_DATA/foto.jpg` |
+
+#### Pastas Principais do Sistema:
+- **📁 FOTO_DE_ROTINA** - Fotos com data e localização, mas sem categoria definida
+- **📁 FOTOS_SEM_IDENTIFICACAO** - Fotos incompletas ou com baixa confiança
+
+#### Funcionalidades:
 - **Pré-verificação**: Valida se todas as fotos têm dados completos
-- **Correção automática**: Preenche datas faltantes usando metadados do arquivo
-- **Estrutura de pastas**:
-  ```
-  FRENTE/
-  └── DISCIPLINA/
-      └── SERVIÇO/
-          └── MM_MES_AAAA/
-              └── DD_MM/
-                  └── foto.jpg
-  ```
-- **Download em ZIP**: Arquivo compactado pronto para uso
+- **Correção automática**: Preenche datas faltantes usando `lastModified` do arquivo
+- **Download em ZIP**: Arquivo compactado com estrutura organizada
 
 ### 6. Configurações
 - Ativar/desativar OCR automático
