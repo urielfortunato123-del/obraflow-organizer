@@ -76,8 +76,8 @@ serve(async (req) => {
       return parts.join(' | ');
     }).join('\n');
 
-    const systemPrompt = `Você é um classificador ULTRA-RÁPIDO de fotos de obras.
-Analise a lista de fotos e classifique TODAS de uma vez.
+    const systemPrompt = `Você é um classificador ULTRA-INTELIGENTE de fotos de obras de engenharia civil e rodovias.
+Sua missão é classificar TODAS as fotos, mesmo com informações mínimas.
 
 RETORNE APENAS um array JSON válido (sem markdown) com objetos para CADA foto:
 [
@@ -85,25 +85,57 @@ RETORNE APENAS um array JSON válido (sem markdown) com objetos para CADA foto:
   ...
 ]
 
-REGRAS CRÍTICAS:
-1. Use o NOME DA PASTA como pista principal para classificar
-2. Fotos na MESMA PASTA geralmente têm a MESMA classificação
-3. Para DISCIPLINA, escolha: ${WORK_CATEGORIES.join(', ')}
-4. Para SERVIÇO, escolha: ${SERVICE_TYPES.join(', ')}
-5. Se não souber, use: frente="FRENTE_NAO_INFORMADA", disciplina="DISCIPLINA_NAO_INFORMADA", servico="SERVICO_NAO_IDENTIFICADO"
-6. Seja RÁPIDO e CONSISTENTE
+## REGRAS DE CLASSIFICAÇÃO:
 
-DICAS:
-- Nomes de pasta como "FREE_FLOW_P01" → frente: "FREE_FLOW_P01"
-- Nomes como "TERRAPLANAGEM" → disciplina: "TERRAPLANAGEM"
-- Nomes como "ESCAVACAO" → servico: "ESCAVAÇÃO"
-- Arquivos na mesma pasta = mesma classificação`;
+### 1. FRENTE (Local da obra)
+- FREE_FLOW_P01 a P25 = Praças de pedágio Free Flow
+- BSO_01 a 08 = Base de Serviço Operacional
+- PRACA_01 a 05 = Praças de pedágio
+- KM_XXX = Quilometragem
+- Se não souber: "FRENTE_NAO_INFORMADA"
 
-    const userContent = `Classifique TODAS estas ${photos.length} fotos:
+### 2. DISCIPLINA (Área técnica) - ESCOLHA UMA:
+${WORK_CATEGORIES.join(', ')}
+
+### 3. SERVIÇO (Atividade) - ESCOLHA UM:
+${SERVICE_TYPES.join(', ')}
+
+## SIGLAS COMUNS EM PASTAS:
+- BC = Bacia de Contenção, Bloco C, ou Base Canteiro → DRENAGEM ou ESTRUTURA
+- BL = Bloco → ESTRUTURA
+- BSO = Base Serviço Operacional → frente: BSO_XX
+- FF ou FREE_FLOW = Free Flow → frente: FREE_FLOW_XX
+- TERR = Terraplanagem → disciplina: TERRAPLANAGEM
+- PAV = Pavimentação → disciplina: PAVIMENTAÇÃO
+- DREN = Drenagem → disciplina: DRENAGEM
+- SIN = Sinalização → disciplina: SINALIZAÇÃO
+- EST = Estrutura → disciplina: ESTRUTURA
+- AGOSTO, SETEMBRO, etc = Mês (não é disciplina!)
+
+## REGRAS CRÍTICAS:
+1. NUNCA deixe campos vazios - sempre classifique com seu melhor palpite
+2. Fotos na MESMA PASTA = MESMA classificação
+3. Se a pasta for só um mês (AGOSTO, JANEIRO...), tente classificar pelo nome do arquivo
+4. WhatsApp Image = foto genérica, use contexto da pasta
+5. Se não tiver NENHUMA pista, use TERRAPLANAGEM como fallback (mais comum em obras)
+6. BC + número (BC1, BC2) provavelmente é DRENAGEM (Bacia de Contenção)
+
+## EXEMPLOS:
+- pasta "AGOSTO/BC2" → disciplina: DRENAGEM (Bacia de Contenção 2)
+- pasta "TERRAPLANAGEM/ESCAVACAO" → disciplina: TERRAPLANAGEM, servico: ESCAVAÇÃO
+- pasta "FREE_FLOW_P03" → frente: FREE_FLOW_P03
+- pasta "JANEIRO/FOTOS" → tente classificar, ou use TERRAPLANAGEM como fallback`;
+
+    const userContent = `Classifique TODAS estas ${photos.length} fotos de obra:
 
 ${photoSummaries}
 
-Retorne o array JSON com a classificação de CADA foto pelo id.`;
+IMPORTANTE: 
+- Retorne um objeto para CADA foto pelo id
+- Não deixe nenhum campo como NAO_INFORMADA se puder adivinhar
+- BC2 provavelmente significa Bacia de Contenção 2 (DRENAGEM)
+- Use seu melhor julgamento!`;
+
 
     console.log('[classify-batch] Chamando Lovable AI...');
 

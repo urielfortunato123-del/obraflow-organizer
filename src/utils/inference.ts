@@ -20,38 +20,42 @@ export function norm(s?: string | null): string {
 export function inferDisciplinaFromPath(folderPath?: string): string {
   const p = norm(folderPath);
   
-  // Drenagem
+  // Drenagem (inclui BC = Bacia de Contenção)
   if (p.includes('DRENAGEM') || p.includes('DRENO') || p.includes('BUEIRO') || 
-      p.includes('SARJETA') || p.includes('VALETA') || p.includes('CANALETA')) {
+      p.includes('SARJETA') || p.includes('VALETA') || p.includes('CANALETA') ||
+      /\bBC\d*\b/.test(p) || p.includes('BACIA')) {
     return 'DRENAGEM';
   }
   
   // Terraplanagem
   if (p.includes('TERRAPLANAGEM') || p.includes('TERRAPLENO') || 
       p.includes('ATERRO') || p.includes('CORTE') || p.includes('ESCAVACAO') ||
-      p.includes('MOVIMENTO DE TERRA') || p.includes('MOV TERRA')) {
+      p.includes('MOVIMENTO DE TERRA') || p.includes('MOV TERRA') ||
+      p.includes('TERR') && !p.includes('TERRENO')) {
     return 'TERRAPLANAGEM';
   }
   
   // Pavimentação
   if (p.includes('PAVIMENT') || p.includes('ASFALTO') || p.includes('CBUQ') ||
-      p.includes('FRESAGEM') || p.includes('RECAPEAMENTO') || p.includes('BASE') ||
-      p.includes('SUB-BASE') || p.includes('IMPRIMACAO')) {
+      p.includes('FRESAGEM') || p.includes('RECAPEAMENTO') || 
+      /\bBASE\b/.test(p) || p.includes('SUB-BASE') || p.includes('IMPRIMACAO') ||
+      p.includes('PAV')) {
     return 'PAVIMENTACAO';
   }
   
   // Sinalização
   if (p.includes('SINALIZ') || p.includes('PLACA') || p.includes('PINTURA DE FAIXA') ||
       p.includes('DEMARCACAO') || p.includes('DEFENSA') || p.includes('NEW JERSEY') ||
-      p.includes('GUARD RAIL')) {
+      p.includes('GUARD RAIL') || p.includes('SIN')) {
     return 'SINALIZACAO';
   }
   
-  // Estrutura / Concreto
+  // Estrutura / Concreto (inclui BL = Bloco)
   if (p.includes('CONCRET') || p.includes('FUNDAC') || p.includes('FORMA') || 
       p.includes('ARMAD') || p.includes('ESTRUTURA') || p.includes('PILAR') ||
       p.includes('VIGA') || p.includes('LAJE') || p.includes('ESTACA') ||
-      p.includes('SAPATA') || p.includes('BLOCO')) {
+      p.includes('SAPATA') || p.includes('BLOCO') || /\bBL\d*\b/.test(p) ||
+      p.includes('EST')) {
     return 'ESTRUTURA';
   }
   
