@@ -17,6 +17,13 @@ import type { PhotoData } from '@/types/photo';
 import { useToast } from '@/hooks/use-toast';
 import { classifyPhoto, needsReview, propagateByFolder, determineStatus } from '@/utils/classification';
 import { extractDateFromFile } from '@/utils/exportPath';
+import { 
+  inferDisciplinaFromPath, 
+  inferFrenteFromPath, 
+  inferDisciplinaFromServico,
+  needsManualReview,
+  applyFallbacks 
+} from '@/utils/inference';
 
 interface TurboProcessPanelProps {
   photos: PhotoData[];
@@ -415,21 +422,60 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
             continue;
           }
 
-          // Aplica resultados, respeitando a hierarquia (pasta > IA)
+          // Aplica resultados com fallbacks determinísticos
           const results = data.results || [];
           for (const result of results) {
             const originalPhoto = batch.find(p => p.id === result.id);
             
+            // Monta classificação base (IA + original)
+            let baseFrente = result.frente || originalPhoto?.frente || '';
+            let baseDisciplina = result.disciplina || originalPhoto?.disciplina || '';
+            let baseServico = result.servico || originalPhoto?.servico || '';
+            
             // Se a pasta já tinha classificação, mantém (pasta > IA)
-            const finalFrente = (originalPhoto?.frente && originalPhoto.frente !== 'FRENTE_NAO_INFORMADA')
-              ? originalPhoto.frente
-              : (result.frente || 'FRENTE_NAO_INFORMADA');
-            const finalDisciplina = (originalPhoto?.disciplina && originalPhoto.disciplina !== 'DISCIPLINA_NAO_INFORMADA')
-              ? originalPhoto.disciplina
-              : (result.disciplina || 'DISCIPLINA_NAO_INFORMADA');
-            const finalServico = (originalPhoto?.servico && originalPhoto.servico !== 'SERVICO_NAO_IDENTIFICADO')
-              ? originalPhoto.servico
-              : (result.servico || 'SERVICO_NAO_IDENTIFICADO');
+            if (originalPhoto?.frente && originalPhoto.frente !== 'FRENTE_NAO_INFORMADA') {
+              baseFrente = originalPhoto.frente;
+            }
+            if (originalPhoto?.disciplina && originalPhoto.disciplina !== 'DISCIPLINA_NAO_INFORMADA') {
+              baseDisciplina = originalPhoto.disciplina;
+            }
+            if (originalPhoto?.servico && originalPhoto.servico !== 'SERVICO_NAO_IDENTIFICADO') {
+              baseServico = originalPhoto.servico;
+            }
+            
+            // ✅ APLICA FALLBACKS DETERMINÍSTICOS
+            // Se ainda falta disciplina, tenta inferir do path ou do serviço
+            if (!baseDisciplina || baseDisciplina === 'DISCIPLINA_NAO_INFORMADA' || 
+                baseDisciplina === 'DISCIPLINA_NAO_IDENTIFICADA') {
+              const inferredDisc = inferDisciplinaFromPath(originalPhoto?.folderPath) ||
+                                   inferDisciplinaFromServico(baseServico);
+              if (inferredDisc) {
+                baseDisciplina = inferredDisc;
+                console.log(`[Turbo] 🔧 Fallback disciplina: ${originalPhoto?.filename} → ${inferredDisc}`);
+              }
+            }
+            
+            // Se ainda falta frente, tenta inferir do path
+            if (!baseFrente || baseFrente === 'FRENTE_NAO_INFORMADA') {
+              const inferredFrente = inferFrenteFromPath(originalPhoto?.folderPath);
+              if (inferredFrente) {
+                baseFrente = inferredFrente;
+                console.log(`[Turbo] 🔧 Fallback frente: ${originalPhoto?.filename} → ${inferredFrente}`);
+              }
+            }
+            
+            // Aplica fallbacks finais
+            const fallbacks = applyFallbacks({
+              frente: baseFrente,
+              disciplina: baseDisciplina,
+              servico: baseServico,
+              folderPath: originalPhoto?.folderPath,
+              filename: originalPhoto?.filename,
+            });
+            
+            const finalFrente = fallbacks.frente;
+            const finalDisciplina = fallbacks.disciplina;
+            const finalServico = fallbacks.servico;
 
             // Determina status final
             const finalStatus = determineStatus({
@@ -445,10 +491,16 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto }: Tu
               servico: finalServico,
               status: finalStatus,
               aiStatus: 'success',
+              aiConfidence: result.confidence ?? 0.7,
             });
 
-            // Só marca para verificação se REALMENTE precisar
-            if (needsReview({ frente: finalFrente, disciplina: finalDisciplina, servico: finalServico })) {
+            // ✅ USA NOVA REGRA DE VERIFICAÇÃO (menos agressiva)
+            if (needsManualReview({ 
+              frente: finalFrente, 
+              disciplina: finalDisciplina, 
+              servico: finalServico,
+              confidence: result.confidence 
+            })) {
               newUnrecognized.push({
                 photoId: result.id,
                 confidence: finalStatus === 'OK' ? 'medium' : 'low',
