@@ -11,6 +11,7 @@ export interface OCRResult {
     google?: { success: boolean; confidence: number };
     azure?: { success: boolean; confidence: number };
     gemini?: { success: boolean; confidence: number };
+    groq?: { success: boolean; confidence: number };
   };
 }
 

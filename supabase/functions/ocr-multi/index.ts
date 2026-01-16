@@ -359,6 +359,97 @@ Retorne APENAS JSON:
   }
 }
 
+// ========== GROQ LLAMA 3.2 VISION ==========
+async function processGroqVision(imageBase64: string): Promise<OCREngineResult> {
+  const apiKey = Deno.env.get("GROQ_API_KEY");
+
+  if (!apiKey) {
+    return {
+      engine: "groq-llama",
+      text: "",
+      confidence: 0,
+      success: false,
+      error: "GROQ_API_KEY não configurada"
+    };
+  }
+
+  try {
+    console.log("[Groq Llama 3.2] Iniciando OCR...");
+
+    const systemPrompt = `Você é um especialista em OCR para construção civil. 
+Extraia TODO o texto visível na imagem, incluindo:
+- Nomes de empresas e fornecedores
+- Números de nota fiscal, pedidos, OS
+- Datas e horários
+- Descrições de materiais e serviços
+- Quantidades e valores
+- Coordenadas GPS
+- Qualquer texto identificável
+
+Retorne APENAS o texto extraído, sem explicações.`;
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.2-90b-vision-preview",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Extraia todo o texto desta imagem." },
+              {
+                type: "image_url",
+                image_url: { url: `data:image/jpeg;base64,${imageBase64}` }
+              }
+            ]
+          }
+        ],
+        max_tokens: 2048,
+        temperature: 0.1,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[Groq Llama 3.2] Erro:", response.status, errorText);
+      return {
+        engine: "groq-llama",
+        text: "",
+        confidence: 0,
+        success: false,
+        error: `HTTP ${response.status}`
+      };
+    }
+
+    const data = await response.json();
+    const extractedText = data.choices?.[0]?.message?.content || "";
+
+    console.log("[Groq Llama 3.2] Texto:", extractedText.substring(0, 200));
+
+    return {
+      engine: "groq-llama",
+      text: extractedText.trim(),
+      confidence: extractedText.length > 10 ? 88 : 45,
+      success: true
+    };
+
+  } catch (error: unknown) {
+    console.error("[Groq Llama 3.2] Erro:", error);
+    return {
+      engine: "groq-llama",
+      text: "",
+      confidence: 0,
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 // ========== COMBINAR RESULTADOS ==========
 function combineResults(results: OCREngineResult[]): OCREngineResult {
   const successful = results.filter(r => r.success && r.text.length > 0);
@@ -386,10 +477,6 @@ function combineResults(results: OCREngineResult[]): OCREngineResult {
   // Pega metadados do Gemini (único que faz análise semântica)
   const geminiResult = results.find(r => r.engine === "gemini-vision" && r.success);
 
-  // Combina textos únicos
-  const allTexts = successful.map(r => r.text);
-  const combinedText = bestText; // Usa o melhor
-
   // Confidence média dos que funcionaram
   const avgConfidence = Math.round(
     successful.reduce((sum, r) => sum + r.confidence, 0) / successful.length
@@ -400,7 +487,7 @@ function combineResults(results: OCREngineResult[]): OCREngineResult {
 
   return {
     engine: "combined",
-    text: combinedText,
+    text: bestText,
     confidence: Math.min(avgConfidence + 5, 100), // Bonus por múltiplos engines
     success: true,
     date: geminiResult?.date || null,
@@ -425,20 +512,22 @@ serve(async (req) => {
 
     console.log("[Multi-OCR] Iniciando processamento paralelo...");
 
-    // Executa TODOS os OCR engines em paralelo
-    const [googleResult, azureResult, geminiResult] = await Promise.all([
+    // Executa TODOS os OCR engines em paralelo (incluindo Groq Llama 3.2)
+    const [googleResult, azureResult, geminiResult, groqResult] = await Promise.all([
       processGoogleVision(input.imageBase64),
       processAzureOCR(input.imageBase64),
-      processGeminiVision(input.imageBase64, input.mimeType || "image/jpeg")
+      processGeminiVision(input.imageBase64, input.mimeType || "image/jpeg"),
+      processGroqVision(input.imageBase64)
     ]);
 
     console.log("[Multi-OCR] Resultados:");
     console.log(`  - Google Vision: ${googleResult.success ? "OK" : "ERRO"} (${googleResult.confidence}%)`);
     console.log(`  - Azure Vision: ${azureResult.success ? "OK" : "ERRO"} (${azureResult.confidence}%)`);
     console.log(`  - Gemini Vision: ${geminiResult.success ? "OK" : "ERRO"} (${geminiResult.confidence}%)`);
+    console.log(`  - Groq Llama 3.2: ${groqResult.success ? "OK" : "ERRO"} (${groqResult.confidence}%)`);
 
-    // Combina resultados
-    const combined = combineResults([googleResult, azureResult, geminiResult]);
+    // Combina resultados de todos os engines
+    const combined = combineResults([googleResult, azureResult, geminiResult, groqResult]);
 
     return new Response(JSON.stringify({
       text: combined.text,
@@ -450,7 +539,8 @@ serve(async (req) => {
       engines: {
         google: { success: googleResult.success, confidence: googleResult.confidence },
         azure: { success: azureResult.success, confidence: azureResult.confidence },
-        gemini: { success: geminiResult.success, confidence: geminiResult.confidence }
+        gemini: { success: geminiResult.success, confidence: geminiResult.confidence },
+        groq: { success: groqResult.success, confidence: groqResult.confidence }
       }
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
