@@ -1,3 +1,153 @@
+import { ALIAS_RULES, type AliasRule } from '@/data/aliases';
+
+// ============================================
+// SISTEMA DE ALIAS PARA CLASSIFICAÇÃO RÁPIDA
+// ============================================
+
+/**
+ * Normaliza texto para comparação
+ * - Uppercase
+ * - Remove acentos
+ * - Substitui _ e - por espaço
+ * - Remove caracteres especiais
+ */
+export function normalizeForMatch(s?: string): string {
+  return (s || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[_\-]+/g, ' ')
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Aplica regras de alias para classificar foto
+ * Retorna disciplina, serviço e frente baseado no folderPath, filename e ocrText
+ */
+export interface AliasMatchResult {
+  frente?: string;
+  disciplina?: string;
+  servico?: string;
+  score: number;
+  matchedRule?: AliasRule;
+}
+
+export function applyAliasRules(input: {
+  folderPath?: string;
+  filename?: string;
+  ocrText?: string;
+}): AliasMatchResult | null {
+  const folder = normalizeForMatch(input.folderPath);
+  const filename = normalizeForMatch(input.filename);
+  const ocr = normalizeForMatch(input.ocrText);
+  const hay = `${folder} ${filename} ${ocr}`;
+
+  let best: AliasMatchResult = { score: 0 };
+
+  for (const rule of ALIAS_RULES) {
+    const scoreBase = rule.prioridade ?? 50;
+    
+    // Verifica se TODOS os termos do match existem no texto
+    const ok = rule.match.every((m) => {
+      const normalizedM = normalizeForMatch(m);
+      return hay.includes(normalizedM);
+    });
+    
+    if (!ok) continue;
+
+    // Bônus se match veio da pasta (mais confiável)
+    let bonusFolder = 0;
+    if (rule.match.some((m) => folder.includes(normalizeForMatch(m)))) {
+      bonusFolder = 20;
+    }
+    
+    // Bônus se match veio do filename
+    let bonusFilename = 0;
+    if (rule.match.some((m) => filename.includes(normalizeForMatch(m)))) {
+      bonusFilename = 10;
+    }
+    
+    // Bônus por número de termos matched (mais específico = melhor)
+    const bonusTerms = rule.match.length * 5;
+
+    const score = scoreBase + bonusFolder + bonusFilename + bonusTerms;
+
+    if (score > best.score) {
+      best = { 
+        frente: rule.frente, 
+        disciplina: rule.disciplina, 
+        servico: rule.servico, 
+        score,
+        matchedRule: rule,
+      };
+    }
+  }
+
+  return best.score > 0 ? best : null;
+}
+
+/**
+ * Classifica foto usando aliases
+ * Retorna resultado com confiança
+ */
+export interface LocalClassificationResult {
+  frente?: string;
+  disciplina?: string;
+  servico?: string;
+  confidence: 'high' | 'medium' | 'low' | 'none';
+  source: 'alias' | 'direct' | 'none';
+  score: number;
+}
+
+export function classifyWithAliases(input: {
+  folderPath?: string;
+  filename?: string;
+  ocrText?: string;
+}): LocalClassificationResult {
+  const aliasResult = applyAliasRules(input);
+  
+  if (!aliasResult || aliasResult.score === 0) {
+    return { confidence: 'none', source: 'none', score: 0 };
+  }
+  
+  // Conta quantos campos foram preenchidos
+  const filled = [
+    aliasResult.frente,
+    aliasResult.disciplina,
+    aliasResult.servico,
+  ].filter(Boolean).length;
+  
+  // Determina confiança baseado em:
+  // - Quantos campos foram preenchidos
+  // - Score total
+  let confidence: 'high' | 'medium' | 'low' | 'none';
+  
+  if (filled >= 2 && aliasResult.score >= 80) {
+    confidence = 'high';
+  } else if (filled >= 2 || (filled === 1 && aliasResult.score >= 70)) {
+    confidence = 'medium';
+  } else if (filled >= 1) {
+    confidence = 'low';
+  } else {
+    confidence = 'none';
+  }
+  
+  return {
+    frente: aliasResult.frente,
+    disciplina: aliasResult.disciplina,
+    servico: aliasResult.servico,
+    confidence,
+    source: 'alias',
+    score: aliasResult.score,
+  };
+}
+
+// ============================================
+// FUNÇÕES UTILITÁRIAS EXISTENTES
+// ============================================
+
 /**
  * Normaliza nome para uso em pastas (remove acentos, espaços, caracteres especiais)
  */
