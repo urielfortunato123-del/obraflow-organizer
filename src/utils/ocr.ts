@@ -6,6 +6,7 @@ export interface OCRResult {
   date?: string | null;
   local?: string | null;
   servico?: string | null;
+  disciplina?: string | null; // Novo: identificado visualmente
 }
 
 export interface OCROptions {
@@ -140,7 +141,7 @@ async function processOCRVision(
 
     console.log(`[OCR Vision] Concluído: ${imageFile.name}`);
     console.log(`[OCR Vision] Texto: ${data.text?.substring(0, 200)}`);
-    console.log(`[OCR Vision] Local: ${data.local}, Serviço: ${data.servico}`);
+    console.log(`[OCR Vision] Local: ${data.local}, Serviço: ${data.servico}, Disciplina: ${data.disciplina}`);
 
     onProgress?.(100);
 
@@ -150,6 +151,7 @@ async function processOCRVision(
       date: data.date,
       local: data.local,
       servico: data.servico,
+      disciplina: data.disciplina, // Novo campo
     };
 
   } catch (error) {
