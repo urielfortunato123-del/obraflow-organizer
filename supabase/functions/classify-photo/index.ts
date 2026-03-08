@@ -148,9 +148,18 @@ Retorne apenas o JSON, sem explicações.`;
 
     if (!response.ok) {
       if (response.status === 429) {
+        // Fallback gracioso: não quebrar o frontend com erro 429
         return new Response(
-          JSON.stringify({ error: "Rate limit excedido. Aguarde um momento e tente novamente." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            local: input.userLocal || 'LOCAL_NAO_INFORMADO',
+            categoria: 'CATEGORIA_NAO_INFORMADA',
+            servico: input.userServico || 'SERVICO_NAO_INFORMADO',
+            year_month: input.yearMonth || null,
+            confianca: 0,
+            fallback: true,
+            aviso: 'IA temporariamente limitada por cota/rate-limit',
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402) {

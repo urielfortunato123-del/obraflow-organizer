@@ -195,10 +195,19 @@ ${photoSummaries}`;
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit excedido. Aguarde um momento." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        // Fallback gracioso para evitar quebra do fluxo em lote
+        const fallbackResults = photos.map((p) => ({
+          id: p.id,
+          frente: p.existingFrente && p.existingFrente !== 'NAO_INFORMADO' ? p.existingFrente : '',
+          categoria: p.existingCategoria && p.existingCategoria !== 'NAO_INFORMADO' ? p.existingCategoria : '',
+          servico: p.existingServico && p.existingServico !== 'NAO_INFORMADO' ? p.existingServico : '',
+          mode: 'UNIDENTIFIED' as const,
+          confidence: 0.0,
+        }));
+
+        return new Response(JSON.stringify({ results: fallbackResults, fallback: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       if (response.status === 402) {
         return new Response(
