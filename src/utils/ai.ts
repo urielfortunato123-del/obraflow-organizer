@@ -24,6 +24,21 @@ export async function classifyWithAI(
   console.log('[AI] Iniciando classificação via Google AI Studio...');
   
   const MAX_RETRIES = 3;
+  const buildFallback = (reason: string): AIResponse => ({
+    frente: input.userFrente || 'FRENTE_NAO_INFORMADA',
+    disciplina: 'DISCIPLINA_NAO_INFORMADA',
+    servico: input.userServico || 'SERVICO_NAO_INFORMADO',
+    year_month: input.yearMonth || '',
+    hora: '',
+    alertas: [reason],
+    confianca: 0,
+  });
+
+  // Evita chamada desnecessária quando não há sinal útil para classificar
+  const noSignal = !input.ocrText?.trim() && !input.userFrente?.trim() && !input.userServico?.trim();
+  if (noSignal) {
+    return buildFallback('Sem dados suficientes para classificação IA');
+  }
   
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
@@ -52,15 +67,7 @@ export async function classifyWithAI(
         // Fallback gracioso para não quebrar a UI quando quota estoura
         if (isRateLimit) {
           console.warn('[AI] Quota/rate limit excedido, usando fallback local');
-          return {
-            frente: input.userFrente || 'FRENTE_NAO_INFORMADA',
-            disciplina: 'DISCIPLINA_NAO_INFORMADA',
-            servico: input.userServico || 'SERVICO_NAO_INFORMADO',
-            year_month: input.yearMonth || '',
-            hora: '',
-            alertas: ['IA com limite de uso no momento'],
-            confianca: 0,
-          };
+          return buildFallback('IA com limite de uso no momento');
         }
 
         console.error('[AI] Erro na edge function:', error);
@@ -78,15 +85,7 @@ export async function classifyWithAI(
 
         if (isRateLimit) {
           console.warn('[AI] Quota/rate limit excedido (data), usando fallback local');
-          return {
-            frente: input.userFrente || 'FRENTE_NAO_INFORMADA',
-            disciplina: 'DISCIPLINA_NAO_INFORMADA',
-            servico: input.userServico || 'SERVICO_NAO_INFORMADO',
-            year_month: input.yearMonth || '',
-            hora: '',
-            alertas: ['IA com limite de uso no momento'],
-            confianca: 0,
-          };
+          return buildFallback('IA com limite de uso no momento');
         }
 
         throw new Error(data.error);
@@ -116,12 +115,12 @@ export async function classifyWithAI(
     } catch (error) {
       if (attempt === MAX_RETRIES - 1) {
         console.error('[AI] Erro na classificação após retries:', error);
-        throw error;
+        return buildFallback('Falha temporária na IA, usando fallback');
       }
     }
   }
 
-  throw new Error('Falha na classificação após múltiplas tentativas');
+  return buildFallback('Falha na classificação após múltiplas tentativas');
 }
 
 /**
