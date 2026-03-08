@@ -25,8 +25,8 @@ interface TurboProcessPanelProps {
   onUpdatePhoto?: (id: string, updates: Partial<PhotoData>) => void;
 }
 
-const BATCH_SIZE = 10; // Reduzido para evitar truncamento de resposta da IA
-const OCR_PARALLEL_LIMIT = 5;
+const BATCH_SIZE = 10;
+const OCR_PARALLEL_LIMIT = 2; // Reduzido para evitar rate limit do Google AI Studio
 
 // ============================================
 // SISTEMA DEFINITIVO - VERSÃO FINAL
@@ -266,6 +266,11 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
         });
         
         const results = await Promise.all(ocrPromises);
+
+        // Delay entre batches para evitar rate limit do Google AI Studio
+        if (i + OCR_PARALLEL_LIMIT < photosNeedingOCR.length) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
         
         for (const { photo, ocrResult, success } of results) {
           if (success && ocrResult) {
