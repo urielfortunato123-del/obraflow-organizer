@@ -380,12 +380,13 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
-                <label className={`text-xs font-medium ${
+                <label className={`text-xs font-medium flex items-center gap-1.5 ${
                   photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
                   Frente {(photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente) && '⚠️'}
+                  <SourceBadge source={photo.sourceFrente} />
                 </label>
                 {editingFrente ? (
                   <AutocompleteInput
