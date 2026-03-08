@@ -295,7 +295,7 @@ Retorne APENAS JSON:
   "confidence": 0-100
 }`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
