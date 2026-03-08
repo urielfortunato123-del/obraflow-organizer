@@ -358,13 +358,18 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
       // SERVIÇO (da pasta ou OCR)
       if (!photo.servico || photo.servico === 'NAO_INFORMADO' || photo.servico === 'SERVICO_NAO_IDENTIFICADO') {
         let servico = extractServicoFromText(photo.folderPath);
+        let servicoSource: 'pasta' | 'ocr' = 'pasta';
         if (!servico && photo.ocrText) {
           servico = extractServicoFromText(photo.ocrText);
+          servicoSource = 'ocr';
           if (servico) sources.ocr = true;
         } else if (servico) {
           sources.folder = true;
         }
-        if (servico) updates.servico = servico;
+        if (servico) {
+          updates.servico = servico;
+          updates.sourceServico = servicoSource;
+        }
       } else {
         sources.folder = true;
       }
