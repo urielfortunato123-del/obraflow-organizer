@@ -244,6 +244,7 @@ async function processAzureOCR(imageBase64: string): Promise<OCREngineResult> {
 }
 
 // ========== GEMINI VISION (Google AI Studio - análise inteligente) ==========
+// Usa gemini-2.0-flash-lite para OCR (quota separada do 2.5-flash usado na classificação)
 async function processGeminiVision(imageBase64: string, mimeType: string): Promise<OCREngineResult> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
 
@@ -258,7 +259,7 @@ async function processGeminiVision(imageBase64: string, mimeType: string): Promi
   }
 
   try {
-    console.log("[Gemini Vision] Iniciando análise inteligente...");
+    console.log("[Gemini Vision] Iniciando análise inteligente (gemini-2.0-flash-lite)...");
 
     const systemPrompt = `Você é um especialista em obras de construção civil e infraestrutura rodoviária.
 Analise a imagem em DUAS etapas:
@@ -295,7 +296,7 @@ Retorne APENAS JSON:
   "confidence": 0-100
 }`;
 
-    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
