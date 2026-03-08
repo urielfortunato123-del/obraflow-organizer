@@ -89,10 +89,10 @@ Pode conter erros de leitura. Tente inferir palavras parciais ou corrompidas pel
 Exemplo: "Escav" pode ser "Escavação", "Pav" pode ser "Pavimentação", etc.`
       : '';
 
-    const systemPrompt = `Você é um assistente especializado em classificar fotos de obras de construção.
+    const systemPrompt = `Você é um assistente especializado em classificar fotos de obras de construção civil e infraestrutura.
 Analise o texto OCR fornecido e retorne APENAS um JSON válido (sem markdown, sem explicações) com a seguinte estrutura:
 {
-  "local": "string curta e clara do local da obra (ex: Free Flow P-09, Pórtico 12)",
+  "local": "string curta e clara do local da obra (ex: Free Flow P-09, KM 070, Lote 01, Canteiro Central)",
   "categoria": "categoria do trabalho em MAIÚSCULAS",
   "servico": "tipo específico do serviço em MAIÚSCULAS",
   "year_month": "YYYY-MM",
@@ -100,19 +100,20 @@ Analise o texto OCR fornecido e retorne APENAS um JSON válido (sem markdown, se
 }
 
 Regras:
-1. Se o usuário forneceu local, use-o (apenas padronize acentos e caixa se necessário).
+1. Se o usuário forneceu local, use-o (apenas padronize).
 2. Para CATEGORIA, escolha uma destas: ${WORK_CATEGORIES.join(', ')}.
 3. Para SERVIÇO, escolha uma destas ou infira do texto: ${SERVICE_TYPES.join(', ')}.
-4. Se não conseguir inferir o local com segurança, use "LOCAL_NAO_INFORMADO".
-5. Se não conseguir inferir a categoria, use "CATEGORIA_NAO_INFORMADA".
-6. Se não conseguir inferir o serviço, use "SERVICO_NAO_INFORMADO".
-7. Para year_month, use a data detectada. Não invente mês.
-8. A confiança deve refletir quão certo você está da classificação.${liteModeNote}
+4. LOCAL pode ser qualquer identificador: FREE_FLOW_PXX, BSO_XX, PRACA_XX, KM_XXX, LOTE_XX, TRECHO_XX, ESTACA_XXXX, CANTEIRO, PONTE_XX, VIADUTO_XX, PISTA_NORTE/SUL, etc.
+5. Se não inferir local: "LOCAL_NAO_INFORMADO".
+6. Se não inferir categoria: "CATEGORIA_NAO_INFORMADA".
+7. Se não inferir serviço: "SERVICO_NAO_INFORMADO".
+8. Para year_month, use a data detectada. Não invente mês.
+9. A confiança deve refletir quão certo você está.${liteModeNote}
 
-Exemplos de classificação:
-- "Pintura da fachada do prédio" → categoria: "ACABAMENTO EXTERNO", servico: "PINTURA EXTERNA"
-- "Troca de telhas" → categoria: "COBERTURA", servico: "MANUTENÇÃO CORRETIVA"
-- "Limpeza do terreno" → categoria: "LIMPEZA", servico: "EXECUÇÃO DE LIMPEZA"`;
+Exemplos:
+- "Pintura da fachada" → categoria: "ACABAMENTO EXTERNO", servico: "PINTURA EXTERNA"
+- "Escavação Km 45" → local: "KM_045", categoria: "TERRAPLANAGEM", servico: "ESCAVAÇÃO"
+- "Limpeza do terreno Lote B" → local: "LOTE_B", categoria: "LIMPEZA", servico: "EXECUÇÃO DE LIMPEZA"`;
 
     const userContent = `Classifique esta foto de obra:
 
