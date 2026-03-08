@@ -411,7 +411,7 @@ Retorne APENAS o texto extraído, sem explicações.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.2-90b-vision-preview",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
           {
