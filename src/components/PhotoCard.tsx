@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { 
   MapPin, Calendar, FileText, CheckCircle, AlertCircle, Clock, 
-  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2, AlertTriangle, ExternalLink
+  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2, AlertTriangle, ExternalLink,
+  Eye, Sparkles, FolderSearch
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
