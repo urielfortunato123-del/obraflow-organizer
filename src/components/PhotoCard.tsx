@@ -38,6 +38,27 @@ interface PhotoCardProps {
   onApplyToSimilar?: (field: 'frente' | 'servico', value: string) => void;
 }
 
+// Badge visual indicando a fonte do campo
+function SourceBadge({ source }: { source?: 'ocr' | 'ia' | 'pasta' | 'manual' }) {
+  if (!source) return null;
+  
+  const config = {
+    ocr: { icon: Eye, label: 'OCR', className: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' },
+    ia: { icon: Sparkles, label: 'IA', className: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' },
+    pasta: { icon: FolderSearch, label: 'Pasta', className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
+    manual: { icon: Edit2, label: 'Manual', className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
+  };
+  
+  const { icon: Icon, label, className } = config[source];
+  
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${className}`}>
+      <Icon className="w-2.5 h-2.5" />
+      {label}
+    </span>
+  );
+}
+
 export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCardProps) {
   const [editingFrente, setEditingFrente] = useState(false);
   const [editingDisciplina, setEditingDisciplina] = useState(false);
