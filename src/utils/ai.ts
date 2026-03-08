@@ -20,30 +20,46 @@ export async function classifyWithAI(
   input: AIClassificationInput,
   _settings: AppSettings
 ): Promise<AIResponse> {
-  console.log('[AI] Iniciando classificação via Lovable AI...');
+  console.log('[AI] Iniciando classificação via Google AI Studio...');
   
-  try {
-    const { data, error } = await supabase.functions.invoke('classify-photo', {
-      body: {
-        ocrText: input.ocrText,
-        dateIso: input.dateIso,
-        yearMonth: input.yearMonth,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        userFrente: input.userFrente,
-        userServico: input.userServico,
-        liteMode: input.liteMode,
-      },
-    });
+  const MAX_RETRIES = 3;
+  
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const { data, error } = await supabase.functions.invoke('classify-photo', {
+        body: {
+          ocrText: input.ocrText,
+          dateIso: input.dateIso,
+          yearMonth: input.yearMonth,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          userFrente: input.userFrente,
+          userServico: input.userServico,
+          liteMode: input.liteMode,
+        },
+      });
 
-    if (error) {
-      console.error('[AI] Erro na edge function:', error);
-      throw new Error(error.message || 'Erro na classificação');
-    }
+      if (error) {
+        // Se for rate limit, retry com backoff
+        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+          const delay = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+          console.warn(`[AI] Rate limit, retry em ${Math.round(delay)}ms (${attempt + 1}/${MAX_RETRIES})`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        console.error('[AI] Erro na edge function:', error);
+        throw new Error(error.message || 'Erro na classificação');
+      }
 
-    if (data.error) {
-      throw new Error(data.error);
-    }
+      if (data.error) {
+        if (data.error.includes('Rate limit') && attempt < MAX_RETRIES - 1) {
+          const delay = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+          console.warn(`[AI] Rate limit (data), retry em ${Math.round(delay)}ms`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw new Error(data.error);
+      }
 
     const parsed: AIResponse = {
       frente: data.frente || data.local || '',
