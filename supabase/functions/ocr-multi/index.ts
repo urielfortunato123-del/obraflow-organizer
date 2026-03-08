@@ -244,6 +244,7 @@ async function processAzureOCR(imageBase64: string): Promise<OCREngineResult> {
 }
 
 // ========== GEMINI VISION (Google AI Studio - análise inteligente) ==========
+// Usa gemini-2.0-flash-lite para OCR (quota separada do 2.5-flash usado na classificação)
 async function processGeminiVision(imageBase64: string, mimeType: string): Promise<OCREngineResult> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
 
@@ -258,7 +259,7 @@ async function processGeminiVision(imageBase64: string, mimeType: string): Promi
   }
 
   try {
-    console.log("[Gemini Vision] Iniciando análise inteligente...");
+    console.log("[Gemini Vision] Iniciando análise inteligente (gemini-2.0-flash-lite)...");
 
     const systemPrompt = `Você é um especialista em obras de construção civil e infraestrutura rodoviária.
 Analise a imagem em DUAS etapas:
@@ -295,7 +296,7 @@ Retorne APENAS JSON:
   "confidence": 0-100
 }`;
 
-    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -410,7 +411,7 @@ Retorne APENAS o texto extraído, sem explicações.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama-3.2-90b-vision-preview",
+        model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -525,24 +526,47 @@ serve(async (req) => {
       throw new Error("imageBase64 é obrigatório");
     }
 
-    console.log("[Multi-OCR] Iniciando processamento paralelo...");
+    console.log("[Multi-OCR] Iniciando processamento...");
 
-    // Executa TODOS os OCR engines em paralelo (incluindo Groq Llama 3.2)
-    const [googleResult, azureResult, geminiResult, groqResult] = await Promise.all([
-      processGoogleVision(input.imageBase64),
-      processAzureOCR(input.imageBase64),
-      processGeminiVision(input.imageBase64, input.mimeType || "image/jpeg"),
-      processGroqVision(input.imageBase64)
-    ]);
+    // Só executa engines que têm API keys configuradas
+    const promises: Promise<OCREngineResult>[] = [];
+    const engineNames: string[] = [];
 
-    console.log("[Multi-OCR] Resultados:");
-    console.log(`  - Google Vision: ${googleResult.success ? "OK" : "ERRO"} (${googleResult.confidence}%)`);
-    console.log(`  - Azure Vision: ${azureResult.success ? "OK" : "ERRO"} (${azureResult.confidence}%)`);
-    console.log(`  - Gemini Vision: ${geminiResult.success ? "OK" : "ERRO"} (${geminiResult.confidence}%)`);
-    console.log(`  - Groq Llama 3.2: ${groqResult.success ? "OK" : "ERRO"} (${groqResult.confidence}%)`);
+    if (Deno.env.get("GOOGLE_AI_API_KEY")) {
+      promises.push(processGeminiVision(input.imageBase64, input.mimeType || "image/jpeg"));
+      engineNames.push("Gemini Vision");
+    }
+    if (Deno.env.get("GOOGLE_VISION_API_KEY")) {
+      promises.push(processGoogleVision(input.imageBase64));
+      engineNames.push("Google Vision");
+    }
+    if (Deno.env.get("AZURE_VISION_ENDPOINT") && Deno.env.get("AZURE_VISION_API_KEY")) {
+      promises.push(processAzureOCR(input.imageBase64));
+      engineNames.push("Azure Vision");
+    }
+    if (Deno.env.get("GROQ_API_KEY")) {
+      promises.push(processGroqVision(input.imageBase64));
+      engineNames.push("Groq");
+    }
 
-    // Combina resultados de todos os engines
-    const combined = combineResults([googleResult, azureResult, geminiResult, groqResult]);
+    if (promises.length === 0) {
+      throw new Error("Nenhum engine de OCR configurado. Configure GOOGLE_AI_API_KEY.");
+    }
+
+    console.log(`[Multi-OCR] Engines disponíveis: ${engineNames.join(", ")}`);
+
+    const results = await Promise.all(promises);
+
+    for (const r of results) {
+      console.log(`  - ${r.engine}: ${r.success ? "OK" : "ERRO"} (${r.confidence}%)`);
+    }
+
+    const combined = combineResults(results);
+
+    const engineStatus: Record<string, { success: boolean; confidence: number }> = {};
+    for (const r of results) {
+      engineStatus[r.engine] = { success: r.success, confidence: r.confidence };
+    }
 
     return new Response(JSON.stringify({
       text: combined.text,
@@ -551,12 +575,7 @@ serve(async (req) => {
       local: combined.local,
       servico: combined.servico,
       disciplina: combined.disciplina,
-      engines: {
-        google: { success: googleResult.success, confidence: googleResult.confidence },
-        azure: { success: azureResult.success, confidence: azureResult.confidence },
-        gemini: { success: geminiResult.success, confidence: geminiResult.confidence },
-        groq: { success: groqResult.success, confidence: groqResult.confidence }
-      }
+      engines: engineStatus
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

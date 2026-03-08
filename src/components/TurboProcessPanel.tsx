@@ -27,7 +27,7 @@ interface TurboProcessPanelProps {
 
 const BATCH_SIZE = 10;
 const OCR_PARALLEL_LIMIT = 1; // 1 por vez para respeitar rate limit do Google AI Studio
-const OCR_DELAY_MS = 4000; // 4 segundos entre chamadas
+const OCR_DELAY_MS = 6000; // 6 segundos entre chamadas (free tier: ~10 req/min)
 
 // ============================================
 // SISTEMA DEFINITIVO - VERSÃO FINAL
