@@ -5,6 +5,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.status === 429 || response.status === 503) {
+      const delay = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+      console.log(`[retry] 429/503, aguardando ${Math.round(delay)}ms (tentativa ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return response;
+  }
+  return fetch(url, options);
+}
+
 // Listas de valores permitidos
 const CATEGORIAS = [
   'TERRAPLANAGEM', 'PAVIMENTACAO', 'DRENAGEM', 'SINALIZACAO',
@@ -149,7 +163,7 @@ ${photoSummaries}`;
 
     console.log('[classify-batch] Chamando Google AI Studio...');
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
