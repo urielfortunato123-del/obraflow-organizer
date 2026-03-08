@@ -115,33 +115,48 @@ serve(async (req) => {
       return parts.join(' | ');
     }).join('\n');
 
-    // PROMPT OFICIAL - REGRAS ANTI-NULL
-    const systemPrompt = `Você é um classificador estrito de fotos de obra.
+    // PROMPT OFICIAL - REGRAS ANTI-NULL - GENÉRICO PARA QUALQUER OBRA
+    const systemPrompt = `Você é um classificador estrito de fotos de obra de construção civil e infraestrutura.
 Você recebe filename, folderPath, ocrText e date.
 
 ## REGRAS OBRIGATÓRIAS:
 
-1. Você NÃO pode inventar categorias. Você deve escolher APENAS entre as listas oficiais:
+1. Você NÃO pode inventar categorias. Escolha APENAS entre as listas oficiais:
    - CATEGORIAS: ${CATEGORIAS.join(', ')}
    - SERVICOS: ${SERVICOS.join(', ')}
-   - FRENTES: FREE_FLOW_P01 a P25, BSO_01 a BSO_08, PRACA_01 a PRACA_05, KM_XXX
+   - FRENTES: Extraia do caminho da pasta/arquivo. Padrões aceitos:
+     * FREE_FLOW_PXX (ex: FREE_FLOW_P09)
+     * BSO_XX (ex: BSO_01)
+     * PRACA_XX (ex: PRACA_01)
+     * KM_XXX ou KM_XXX_XXX (ex: KM_070, KM_070_080)
+     * LOTE_XX ou LOTE_X (ex: LOTE_01, LOTE_A)
+     * TRECHO_XX (ex: TRECHO_01)
+     * ESTACA_XXXX (ex: ESTACA_120)
+     * CANTEIRO_OBRAS, CANTEIRO_CENTRAL, CANTEIRO_XX
+     * PONTE_XX, VIADUTO_XX
+     * PISTA_NORTE, PISTA_SUL, SENTIDO_CAPITAL, SENTIDO_INTERIOR
+     * Qualquer local identificável no caminho (normalizado em MAIÚSCULAS com underscores)
 
-2. Se não houver evidência suficiente para preencher os 3 campos com segurança, você NÃO deve preencher parcialmente.
+2. Se não houver evidência suficiente para preencher os 3 campos com segurança, NÃO preencha parcialmente.
 
-3. Você DEVE retornar um campo "mode" com um destes valores:
+3. Retorne um campo "mode":
    - "AUTO": quando frente, categoria e servico forem selecionados com segurança
-   - "ROUTINE": quando NÃO dá para definir frente/categoria/servico, mas há evidência de data + local (KM, estaca, sentido, GPS mencionado, ou local detectável no texto/nome/pasta)
-   - "UNIDENTIFIED": quando a identificação for incompleta, duvidosa ou sem evidência de local/contexto
+   - "ROUTINE": quando NÃO dá para definir frente/categoria/servico, mas há data + local
+   - "UNIDENTIFIED": identificação incompleta ou sem evidência
 
-4. Confiança (confidence) deve ser número 0..1.
+4. Confiança (confidence): número 0..1.
 
-5. Se mode for "ROUTINE" ou "UNIDENTIFIED", deixe frente/categoria/servico como strings vazias ("").
+5. Se mode "ROUTINE" ou "UNIDENTIFIED", deixe frente/categoria/servico como "".
 
 6. Se campo já preenchido (existingXxx), MANTER o valor.
 
-7. BC = Bacia Contenção = DRENAGEM
-
-8. Fotos na MESMA pasta = geralmente MESMA classificação
+7. DICAS DE CONTEXTO:
+   - BC = Bacia Contenção = DRENAGEM
+   - BL = Bloco = ESTRUTURA
+   - PAV = PAVIMENTACAO
+   - SIN = SINALIZACAO
+   - EST = ESTRUTURA
+   - Fotos na MESMA pasta = geralmente MESMA classificação
 
 ## FORMATO DE RESPOSTA (JSON por foto):
 {
