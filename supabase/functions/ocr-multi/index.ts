@@ -228,9 +228,9 @@ async function processAzureOCR(imageBase64: string): Promise<OCREngineResult> {
   }
 }
 
-// ========== GEMINI VISION (Lovable AI - análise inteligente) ==========
+// ========== GEMINI VISION (Google AI Studio - análise inteligente) ==========
 async function processGeminiVision(imageBase64: string, mimeType: string): Promise<OCREngineResult> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
 
   if (!apiKey) {
     return {
@@ -238,7 +238,7 @@ async function processGeminiVision(imageBase64: string, mimeType: string): Promi
       text: "",
       confidence: 0,
       success: false,
-      error: "LOVABLE_API_KEY não configurada"
+      error: "GOOGLE_AI_API_KEY não configurada"
     };
   }
 
@@ -280,29 +280,29 @@ Retorne APENAS JSON:
   "confidence": 0-100
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { 
-            role: "user", 
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: `data:${mimeType};base64,${imageBase64}` }
-              },
-              { type: "text", text: "Extraia texto e identifique o serviço desta foto de obra." }
-            ]
-          },
-        ],
-        temperature: 0.1,
-        max_tokens: 500,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: imageBase64,
+              }
+            },
+            { text: "Extraia texto e identifique o serviço desta foto de obra." }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 500,
+        },
       }),
     });
 
@@ -319,7 +319,7 @@ Retorne APENAS JSON:
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
       return {
