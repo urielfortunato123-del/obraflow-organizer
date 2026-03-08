@@ -336,6 +336,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
         const frente = extractFrenteFromPath(photo.folderPath, photo.filename);
         if (frente) {
           updates.frente = frente;
+          updates.sourceFrente = 'pasta';
           sources.folder = true;
         }
       } else {
@@ -347,6 +348,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
         const categoria = extractCategoriaFromPath(photo.folderPath);
         if (categoria) {
           updates.disciplina = categoria;
+          updates.sourceDisciplina = 'pasta';
           sources.folder = true;
         }
       } else {
