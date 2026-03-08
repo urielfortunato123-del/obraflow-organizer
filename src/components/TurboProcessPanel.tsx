@@ -277,17 +277,20 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
           if (success && ocrResult) {
             const updates: Partial<PhotoData> = { ocrText: ocrResult.text || '' };
             
-            // PRÉ-CARREGA dados do OCR Vision (servico, disciplina, frente/local)
+            // PRÉ-CARREGA dados do OCR Vision (servico, disciplina, frente/local) com source tracking
             if (ocrResult.servico) {
               updates.servico = ocrResult.servico;
+              updates.sourceServico = 'ocr';
               console.log(`[Turbo] 📋 OCR pré-carregou serviço: ${ocrResult.servico} para ${photo.filename}`);
             }
             if (ocrResult.disciplina) {
               updates.disciplina = ocrResult.disciplina;
+              updates.sourceDisciplina = 'ocr';
               console.log(`[Turbo] 📋 OCR pré-carregou disciplina: ${ocrResult.disciplina} para ${photo.filename}`);
             }
             if (ocrResult.local) {
               updates.frente = ocrResult.local.toUpperCase().replace(/[\s-]+/g, '_');
+              updates.sourceFrente = 'ocr';
               console.log(`[Turbo] 📋 OCR pré-carregou frente: ${updates.frente} para ${photo.filename}`);
             }
             
