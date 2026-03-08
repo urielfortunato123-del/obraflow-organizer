@@ -26,7 +26,8 @@ interface TurboProcessPanelProps {
 }
 
 const BATCH_SIZE = 10;
-const OCR_PARALLEL_LIMIT = 2; // Reduzido para evitar rate limit do Google AI Studio
+const OCR_PARALLEL_LIMIT = 1; // 1 por vez para respeitar rate limit do Google AI Studio
+const OCR_DELAY_MS = 4000; // 4 segundos entre chamadas
 
 // ============================================
 // SISTEMA DEFINITIVO - VERSÃO FINAL
@@ -269,16 +270,33 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
 
         // Delay entre batches para evitar rate limit do Google AI Studio
         if (i + OCR_PARALLEL_LIMIT < photosNeedingOCR.length) {
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, OCR_DELAY_MS));
         }
         
         for (const { photo, ocrResult, success } of results) {
           if (success && ocrResult) {
             const updates: Partial<PhotoData> = { ocrText: ocrResult.text || '' };
             
-            // Usa dados do OCR Vision se disponíveis
-            if (ocrResult.servico) updates.servico = ocrResult.servico;
-            if (ocrResult.disciplina) updates.disciplina = ocrResult.disciplina;
+            // PRÉ-CARREGA dados do OCR Vision (servico, disciplina, frente/local)
+            if (ocrResult.servico) {
+              updates.servico = ocrResult.servico;
+              console.log(`[Turbo] 📋 OCR pré-carregou serviço: ${ocrResult.servico} para ${photo.filename}`);
+            }
+            if (ocrResult.disciplina) {
+              updates.disciplina = ocrResult.disciplina;
+              console.log(`[Turbo] 📋 OCR pré-carregou disciplina: ${ocrResult.disciplina} para ${photo.filename}`);
+            }
+            if (ocrResult.local) {
+              updates.frente = ocrResult.local.toUpperCase().replace(/[\s-]+/g, '_');
+              console.log(`[Turbo] 📋 OCR pré-carregou frente: ${updates.frente} para ${photo.filename}`);
+            }
+            
+            // Calcula confiança baseada em quantos campos o OCR preencheu
+            const fieldsFound = [ocrResult.servico, ocrResult.disciplina, ocrResult.local].filter(Boolean).length;
+            if (fieldsFound >= 2) {
+              updates.aiConfidence = 0.75;
+              updates.aiStatus = 'success';
+            }
             
             onUpdatePhoto(photo.id, updates);
             
@@ -468,8 +486,15 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
       console.log(`[Turbo] ETAPA 4: IA para ${photosNeedingAI.length} fotos`);
       
       const batches = Math.ceil(photosNeedingAI.length / BATCH_SIZE);
+      let retryCount = 0;
+      const MAX_BATCH_RETRIES = 3;
       
       for (let i = 0; i < batches; i++) {
+        // Delay entre batches para evitar rate limit
+        if (i > 0) {
+          await new Promise(r => setTimeout(r, 5000));
+        }
+        
         const start = i * BATCH_SIZE;
         const end = Math.min(start + BATCH_SIZE, photosNeedingAI.length);
         const batch = photosNeedingAI.slice(start, end);
@@ -497,14 +522,18 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
           }
           
           if (data.error) {
-            if (data.error.includes('Rate limit')) {
-              await new Promise(r => setTimeout(r, 5000));
+            if (data.error.includes('Rate limit') && retryCount < MAX_BATCH_RETRIES) {
+              retryCount++;
+              console.warn(`[Turbo] Rate limit, aguardando 10s... (retry ${retryCount}/${MAX_BATCH_RETRIES})`);
+              await new Promise(r => setTimeout(r, 10000));
               i--;
               continue;
             }
             batch.forEach(p => pendingIds.push(p.id));
             continue;
           }
+          
+          retryCount = 0; // Reset retry count on success
           
           // Aplica resultados
           const results = data.results || [];
