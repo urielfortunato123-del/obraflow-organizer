@@ -207,12 +207,18 @@ const Index = () => {
           }
         }
 
-        // IA
+        // IA - SKIP se OCR Vision já classificou (servico + disciplina)
         const currentPhoto = photos.find(p => p.id === photo.id);
         const updatedPhoto = { ...photo, ...currentPhoto };
+        
+        const alreadyClassified = updatedPhoto.servico && updatedPhoto.servico !== 'NAO_INFORMADO' &&
+                                   updatedPhoto.disciplina && updatedPhoto.disciplina !== 'NAO_INFORMADO';
 
-        if (settings.prioridadeIA && isAIAvailable(settings)) {
+        if (settings.prioridadeIA && isAIAvailable(settings) && !alreadyClassified) {
           setProgressLabel(`IA: ${photo.filename}`);
+          
+          // Throttle: espera 4s entre chamadas para evitar rate limit
+          await new Promise(r => setTimeout(r, 4000));
           
           handleUpdatePhoto(photo.id, { aiStatus: 'processing' });
 
@@ -250,6 +256,14 @@ const Index = () => {
               status: updatedPhoto.ocrStatus === 'success' ? 'IA Falhou' : 'OCR Falhou',
             });
           }
+        } else if (alreadyClassified) {
+          // OCR Vision já classificou, marca como sucesso
+          console.log(`[Process] IA skip: ${photo.filename} já classificado pelo OCR Vision`);
+          handleUpdatePhoto(photo.id, {
+            aiStatus: 'success',
+            aiConfidence: 0.75,
+            status: 'OK',
+          });
         } else {
           // IA desabilitada ou indisponível
           handleUpdatePhoto(photo.id, {
