@@ -486,8 +486,15 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
       console.log(`[Turbo] ETAPA 4: IA para ${photosNeedingAI.length} fotos`);
       
       const batches = Math.ceil(photosNeedingAI.length / BATCH_SIZE);
+      let retryCount = 0;
+      const MAX_BATCH_RETRIES = 3;
       
       for (let i = 0; i < batches; i++) {
+        // Delay entre batches para evitar rate limit
+        if (i > 0) {
+          await new Promise(r => setTimeout(r, 5000));
+        }
+        
         const start = i * BATCH_SIZE;
         const end = Math.min(start + BATCH_SIZE, photosNeedingAI.length);
         const batch = photosNeedingAI.slice(start, end);
@@ -515,14 +522,18 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
           }
           
           if (data.error) {
-            if (data.error.includes('Rate limit')) {
-              await new Promise(r => setTimeout(r, 5000));
+            if (data.error.includes('Rate limit') && retryCount < MAX_BATCH_RETRIES) {
+              retryCount++;
+              console.warn(`[Turbo] Rate limit, aguardando 10s... (retry ${retryCount}/${MAX_BATCH_RETRIES})`);
+              await new Promise(r => setTimeout(r, 10000));
               i--;
               continue;
             }
             batch.forEach(p => pendingIds.push(p.id));
             continue;
           }
+          
+          retryCount = 0; // Reset retry count on success
           
           // Aplica resultados
           const results = data.results || [];
