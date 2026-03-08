@@ -558,6 +558,10 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
               frente: result.frente || photo.frente || 'NAO_INFORMADO',
               disciplina: result.categoria || photo.disciplina || 'NAO_INFORMADO',
               servico: result.servico || photo.servico || 'NAO_INFORMADO',
+              // Track source: only set to 'ia' if AI actually provided the value
+              ...(result.frente && !photo.sourceFrente && { sourceFrente: 'ia' as const }),
+              ...(result.categoria && !photo.sourceDisciplina && { sourceDisciplina: 'ia' as const }),
+              ...(result.servico && !photo.sourceServico && { sourceServico: 'ia' as const }),
               aiConfidence: confidence,
               aiStatus: 'success',
               status,
