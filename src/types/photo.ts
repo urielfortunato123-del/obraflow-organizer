@@ -37,6 +37,11 @@ export interface PhotoData {
   // Hint de localização detectado (ex: "KM_070_080", "GPS", "ESTACA_120")
   locationHint?: string;
   
+  // Fonte de cada campo (OCR Vision, IA, pasta, manual)
+  sourceFrente?: 'ocr' | 'ia' | 'pasta' | 'manual';
+  sourceDisciplina?: 'ocr' | 'ia' | 'pasta' | 'manual';
+  sourceServico?: 'ocr' | 'ia' | 'pasta' | 'manual';
+  
   // Alertas
   alertas: string[]; // Ex: ["SEM PLACA DE IDENTIFICAÇÃO"]
   
