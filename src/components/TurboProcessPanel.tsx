@@ -277,17 +277,20 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
           if (success && ocrResult) {
             const updates: Partial<PhotoData> = { ocrText: ocrResult.text || '' };
             
-            // PRÉ-CARREGA dados do OCR Vision (servico, disciplina, frente/local)
+            // PRÉ-CARREGA dados do OCR Vision (servico, disciplina, frente/local) com source tracking
             if (ocrResult.servico) {
               updates.servico = ocrResult.servico;
+              updates.sourceServico = 'ocr';
               console.log(`[Turbo] 📋 OCR pré-carregou serviço: ${ocrResult.servico} para ${photo.filename}`);
             }
             if (ocrResult.disciplina) {
               updates.disciplina = ocrResult.disciplina;
+              updates.sourceDisciplina = 'ocr';
               console.log(`[Turbo] 📋 OCR pré-carregou disciplina: ${ocrResult.disciplina} para ${photo.filename}`);
             }
             if (ocrResult.local) {
               updates.frente = ocrResult.local.toUpperCase().replace(/[\s-]+/g, '_');
+              updates.sourceFrente = 'ocr';
               console.log(`[Turbo] 📋 OCR pré-carregou frente: ${updates.frente} para ${photo.filename}`);
             }
             
@@ -333,6 +336,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
         const frente = extractFrenteFromPath(photo.folderPath, photo.filename);
         if (frente) {
           updates.frente = frente;
+          updates.sourceFrente = 'pasta';
           sources.folder = true;
         }
       } else {
@@ -344,6 +348,7 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
         const categoria = extractCategoriaFromPath(photo.folderPath);
         if (categoria) {
           updates.disciplina = categoria;
+          updates.sourceDisciplina = 'pasta';
           sources.folder = true;
         }
       } else {
@@ -353,13 +358,18 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
       // SERVIÇO (da pasta ou OCR)
       if (!photo.servico || photo.servico === 'NAO_INFORMADO' || photo.servico === 'SERVICO_NAO_IDENTIFICADO') {
         let servico = extractServicoFromText(photo.folderPath);
+        let servicoSource: 'pasta' | 'ocr' = 'pasta';
         if (!servico && photo.ocrText) {
           servico = extractServicoFromText(photo.ocrText);
+          servicoSource = 'ocr';
           if (servico) sources.ocr = true;
         } else if (servico) {
           sources.folder = true;
         }
-        if (servico) updates.servico = servico;
+        if (servico) {
+          updates.servico = servico;
+          updates.sourceServico = servicoSource;
+        }
       } else {
         sources.folder = true;
       }
@@ -548,6 +558,10 @@ export function TurboProcessPanel({ photos, onBatchUpdate, onScrollToPhoto, onUp
               frente: result.frente || photo.frente || 'NAO_INFORMADO',
               disciplina: result.categoria || photo.disciplina || 'NAO_INFORMADO',
               servico: result.servico || photo.servico || 'NAO_INFORMADO',
+              // Track source: only set to 'ia' if AI actually provided the value
+              ...(result.frente && !photo.sourceFrente && { sourceFrente: 'ia' as const }),
+              ...(result.categoria && !photo.sourceDisciplina && { sourceDisciplina: 'ia' as const }),
+              ...(result.servico && !photo.sourceServico && { sourceServico: 'ia' as const }),
               aiConfidence: confidence,
               aiStatus: 'success',
               status,

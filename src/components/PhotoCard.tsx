@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { 
   MapPin, Calendar, FileText, CheckCircle, AlertCircle, Clock, 
-  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2, AlertTriangle, ExternalLink
+  Edit2, X, Check, Trash2, ZoomIn, MoreVertical, FolderOpen, Copy, Wand2, AlertTriangle, ExternalLink,
+  Eye, Sparkles, FolderSearch
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,6 +36,27 @@ interface PhotoCardProps {
   onDelete?: (id: string) => void;
   onApplyToAll?: (field: 'frente' | 'servico', value: string) => void;
   onApplyToSimilar?: (field: 'frente' | 'servico', value: string) => void;
+}
+
+// Badge visual indicando a fonte do campo
+function SourceBadge({ source }: { source?: 'ocr' | 'ia' | 'pasta' | 'manual' }) {
+  if (!source) return null;
+  
+  const config = {
+    ocr: { icon: Eye, label: 'OCR', className: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30' },
+    ia: { icon: Sparkles, label: 'IA', className: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30' },
+    pasta: { icon: FolderSearch, label: 'Pasta', className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' },
+    manual: { icon: Edit2, label: 'Manual', className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' },
+  };
+  
+  const { icon: Icon, label, className } = config[source];
+  
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded border ${className}`}>
+      <Icon className="w-2.5 h-2.5" />
+      {label}
+    </span>
+  );
 }
 
 export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCardProps) {
@@ -75,17 +97,17 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
   };
 
   const handleSaveFrente = () => {
-    onUpdate(photo.id, { frente: frenteValue });
+    onUpdate(photo.id, { frente: frenteValue, sourceFrente: 'manual' });
     setEditingFrente(false);
   };
 
   const handleSaveServico = () => {
-    onUpdate(photo.id, { servico: servicoValue });
+    onUpdate(photo.id, { servico: servicoValue, sourceServico: 'manual' });
     setEditingServico(false);
   };
 
   const handleSaveDisciplina = () => {
-    onUpdate(photo.id, { disciplina: disciplinaValue });
+    onUpdate(photo.id, { disciplina: disciplinaValue, sourceDisciplina: 'manual' });
     setEditingDisciplina(false);
   };
 
@@ -358,12 +380,13 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
-                <label className={`text-xs font-medium ${
+                <label className={`text-xs font-medium flex items-center gap-1.5 ${
                   photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
                   Frente {(photo.frente === 'FRENTE_NAO_INFORMADA' || !photo.frente) && '⚠️'}
+                  <SourceBadge source={photo.sourceFrente} />
                 </label>
                 {editingFrente ? (
                   <AutocompleteInput
@@ -410,12 +433,13 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
-                <label className={`text-xs font-medium ${
+                <label className={`text-xs font-medium flex items-center gap-1.5 ${
                   photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
                   Disciplina {(photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina) && '⚠️'}
+                  <SourceBadge source={photo.sourceDisciplina} />
                 </label>
                 {editingDisciplina ? (
                   <AutocompleteInput
@@ -451,12 +475,13 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
-                <label className={`text-xs font-medium ${
+                <label className={`text-xs font-medium flex items-center gap-1.5 ${
                   photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
                   Serviço {(photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico) && '⚠️'}
+                  <SourceBadge source={photo.sourceServico} />
                 </label>
                 {editingServico ? (
                   <AutocompleteInput

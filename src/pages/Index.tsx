@@ -193,9 +193,10 @@ const Index = () => {
               hora: finalHora,
               latitude: coords.latitude,
               longitude: coords.longitude,
-              // Se o Vision já extraiu frente/serviço, usa eles
-              ...(visionFrente && { frente: visionFrente }),
-              ...(visionServico && { servico: visionServico }),
+              // Se o Vision já extraiu frente/serviço, usa eles com source tracking
+              ...(visionFrente && { frente: visionFrente, sourceFrente: 'ocr' as const }),
+              ...(visionServico && { servico: visionServico, sourceServico: 'ocr' as const }),
+              ...(ocrResult.disciplina && { disciplina: ocrResult.disciplina, sourceDisciplina: 'ocr' as const }),
             });
 
           } catch (ocrError) {
@@ -241,6 +242,9 @@ const Index = () => {
               frente: aiResult.frente,
               disciplina: aiResult.disciplina,
               servico: aiResult.servico,
+              sourceFrente: 'ia' as const,
+              sourceDisciplina: 'ia' as const,
+              sourceServico: 'ia' as const,
               yearMonth: aiResult.year_month || updatedPhoto.yearMonth,
               hora: aiResult.hora || updatedPhoto.hora,
               alertas: aiResult.alertas || [],
