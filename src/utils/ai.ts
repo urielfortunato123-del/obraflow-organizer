@@ -41,23 +41,54 @@ export async function classifyWithAI(
       });
 
       if (error) {
-        if ((error.message?.includes('429') || error.message?.includes('Rate limit')) && attempt < MAX_RETRIES - 1) {
-          const delay = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+        const isRateLimit = error.message?.includes('429') || error.message?.includes('Rate limit');
+        if (isRateLimit && attempt < MAX_RETRIES - 1) {
+          const delay = Math.pow(2, attempt + 1) * 2000 + Math.random() * 1000;
           console.warn(`[AI] Rate limit, retry em ${Math.round(delay)}ms (${attempt + 1}/${MAX_RETRIES})`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
+
+        // Fallback gracioso para não quebrar a UI quando quota estoura
+        if (isRateLimit) {
+          console.warn('[AI] Quota/rate limit excedido, usando fallback local');
+          return {
+            frente: input.userFrente || 'FRENTE_NAO_INFORMADA',
+            disciplina: 'DISCIPLINA_NAO_INFORMADA',
+            servico: input.userServico || 'SERVICO_NAO_INFORMADO',
+            year_month: input.yearMonth || '',
+            hora: '',
+            alertas: ['IA com limite de uso no momento'],
+            confianca: 0,
+          };
+        }
+
         console.error('[AI] Erro na edge function:', error);
         throw new Error(error.message || 'Erro na classificação');
       }
 
       if (data.error) {
-        if (data.error.includes('Rate limit') && attempt < MAX_RETRIES - 1) {
-          const delay = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
+        const isRateLimit = data.error.includes('Rate limit') || data.error.includes('429');
+        if (isRateLimit && attempt < MAX_RETRIES - 1) {
+          const delay = Math.pow(2, attempt + 1) * 2000 + Math.random() * 1000;
           console.warn(`[AI] Rate limit (data), retry em ${Math.round(delay)}ms`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
+
+        if (isRateLimit) {
+          console.warn('[AI] Quota/rate limit excedido (data), usando fallback local');
+          return {
+            frente: input.userFrente || 'FRENTE_NAO_INFORMADA',
+            disciplina: 'DISCIPLINA_NAO_INFORMADA',
+            servico: input.userServico || 'SERVICO_NAO_INFORMADO',
+            year_month: input.yearMonth || '',
+            hora: '',
+            alertas: ['IA com limite de uso no momento'],
+            confianca: 0,
+          };
+        }
+
         throw new Error(data.error);
       }
 
