@@ -97,17 +97,17 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
   };
 
   const handleSaveFrente = () => {
-    onUpdate(photo.id, { frente: frenteValue });
+    onUpdate(photo.id, { frente: frenteValue, sourceFrente: 'manual' });
     setEditingFrente(false);
   };
 
   const handleSaveServico = () => {
-    onUpdate(photo.id, { servico: servicoValue });
+    onUpdate(photo.id, { servico: servicoValue, sourceServico: 'manual' });
     setEditingServico(false);
   };
 
   const handleSaveDisciplina = () => {
-    onUpdate(photo.id, { disciplina: disciplinaValue });
+    onUpdate(photo.id, { disciplina: disciplinaValue, sourceDisciplina: 'manual' });
     setEditingDisciplina(false);
   };
 
