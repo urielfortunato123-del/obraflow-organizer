@@ -13,8 +13,9 @@ interface AIClassificationInput {
 }
 
 /**
- * Classifica uma foto usando Lovable AI (Gemini Lite)
+ * Classifica uma foto usando Google AI Studio
  * Usa edge function para não expor API keys
+ * Inclui retry com backoff para rate limiting
  */
 export async function classifyWithAI(
   input: AIClassificationInput,
@@ -40,8 +41,7 @@ export async function classifyWithAI(
       });
 
       if (error) {
-        // Se for rate limit, retry com backoff
-        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+        if ((error.message?.includes('429') || error.message?.includes('Rate limit')) && attempt < MAX_RETRIES - 1) {
           const delay = Math.pow(2, attempt + 1) * 1000 + Math.random() * 1000;
           console.warn(`[AI] Rate limit, retry em ${Math.round(delay)}ms (${attempt + 1}/${MAX_RETRIES})`);
           await new Promise(r => setTimeout(r, delay));
@@ -61,33 +61,36 @@ export async function classifyWithAI(
         throw new Error(data.error);
       }
 
-    const parsed: AIResponse = {
-      frente: data.frente || data.local || '',
-      disciplina: data.disciplina || data.categoria || '',
-      servico: data.servico || '',
-      year_month: data.year_month || '',
-      hora: data.hora || '',
-      alertas: data.alertas || [],
-      confianca: data.confianca || 0,
-    };
+      const parsed: AIResponse = {
+        frente: data.frente || data.local || '',
+        disciplina: data.disciplina || data.categoria || '',
+        servico: data.servico || '',
+        year_month: data.year_month || '',
+        hora: data.hora || '',
+        alertas: data.alertas || [],
+        confianca: data.confianca || 0,
+      };
 
-    // Validação básica
-    if (!parsed.frente || !parsed.servico) {
-      throw new Error('Resposta da IA incompleta');
+      if (!parsed.frente || !parsed.servico) {
+        throw new Error('Resposta da IA incompleta');
+      }
+
+      if (!parsed.year_month && input.yearMonth) {
+        parsed.year_month = input.yearMonth;
+      }
+
+      console.log('[AI] Classificação concluída:', parsed);
+      return parsed;
+
+    } catch (error) {
+      if (attempt === MAX_RETRIES - 1) {
+        console.error('[AI] Erro na classificação após retries:', error);
+        throw error;
+      }
     }
-
-    // Usa year_month da IA apenas se não temos um detectado
-    if (!parsed.year_month && input.yearMonth) {
-      parsed.year_month = input.yearMonth;
-    }
-
-    console.log('[AI] Classificação concluída:', parsed);
-    return parsed;
-
-  } catch (error) {
-    console.error('[AI] Erro na classificação:', error);
-    throw error;
   }
+
+  throw new Error('Falha na classificação após múltiplas tentativas');
 }
 
 /**
