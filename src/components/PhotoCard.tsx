@@ -433,12 +433,13 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
-                <label className={`text-xs font-medium ${
+                <label className={`text-xs font-medium flex items-center gap-1.5 ${
                   photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
                   Disciplina {(photo.disciplina === 'DISCIPLINA_NAO_INFORMADA' || !photo.disciplina) && '⚠️'}
+                  <SourceBadge source={photo.sourceDisciplina} />
                 </label>
                 {editingDisciplina ? (
                   <AutocompleteInput
@@ -474,12 +475,13 @@ export function PhotoCard({ photo, onUpdate, onDelete, onApplyToAll }: PhotoCard
                   ? 'bg-warning/10 border-2 border-warning/50 border-dashed' 
                   : ''
               }`}>
-                <label className={`text-xs font-medium ${
+                <label className={`text-xs font-medium flex items-center gap-1.5 ${
                   photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico 
                     ? 'text-warning' 
                     : 'text-muted-foreground'
                 }`}>
                   Serviço {(photo.servico === 'SERVICO_NAO_IDENTIFICADO' || !photo.servico) && '⚠️'}
+                  <SourceBadge source={photo.sourceServico} />
                 </label>
                 {editingServico ? (
                   <AutocompleteInput
